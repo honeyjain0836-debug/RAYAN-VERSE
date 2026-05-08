@@ -1,0 +1,97 @@
+{
+  "entities": {
+    "Video": {
+      "title": "Portfolio Video",
+      "description": "Represents a video project in the portfolio.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "url": { "type": "string", "description": "YouTube/Vimeo link or direct link" },
+        "category": { 
+          "type": "string", 
+          "enum": ["YouTube", "Reels", "Commercials", "Short Films", "Motion Graphics"] 
+        },
+        "duration": { "type": "string" },
+        "thumbnail": { "type": "string" },
+        "views": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "url", "category"]
+    },
+    "Review": {
+      "title": "Review",
+      "description": "Client or viewer review.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "rating": { "type": "number", "minimum": 1, "maximum": 5 },
+        "text": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "rating", "text", "createdAt"]
+    },
+    "Query": {
+      "title": "Order Request",
+      "description": "Project order request from a potential client.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "projectType": { "type": "string" },
+        "requirements": { "type": "string" },
+        "budget": { "type": "number" },
+        "deadline": { "type": "string", "format": "date" },
+        "source": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "contacted", "completed"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "email", "projectType", "requirements", "budget", "createdAt"]
+    },
+    "Message": {
+      "title": "Contact Message",
+      "description": "General message from contact form.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "subject": { "type": "string" },
+        "message": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "email", "message", "createdAt"]
+    },
+    "Setting": {
+      "title": "Setting",
+      "description": "Application settings and configurations.",
+      "type": "object",
+      "properties": {
+        "photoURL": { "type": "string", "description": "URL of the profile photo" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+  "firestore": {
+    "videos": {
+      "schema": "Video",
+      "description": "Collection of portfolio videos."
+    },
+    "reviews": {
+      "schema": "Review",
+      "description": "Collection of visitor reviews."
+    },
+    "queries": {
+      "schema": "Query",
+      "description": "Collection of detailed project order requests."
+    },
+    "messages": {
+      "schema": "Message",
+      "description": "Collection of general contact messages."
+    },
+    "settings": {
+      "schema": "Setting",
+      "description": "Global application settings (e.g., profile photo)."
+    }
+  }
+}
