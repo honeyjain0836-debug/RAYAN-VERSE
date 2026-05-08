@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import type { FormEvent, ChangeEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Lock, LogOut, Video, MessageSquare, Briefcase, Plus, Trash2, Eye, ExternalLink, Star, X, Settings as SettingsIcon, Upload, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Lock, LogOut, Video, MessageSquare, Briefcase, Plus, Trash2, Eye, ExternalLink, Star, X, Settings as SettingsIcon, Upload, CheckCircle2, AlertCircle, Menu } from 'lucide-react';
 import { collection, addDoc, deleteDoc, doc, onSnapshot, query, orderBy, serverTimestamp, setDoc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
@@ -62,18 +62,18 @@ export function AdminPanel() {
 
   if (!isAuth) {
     return (
-      <div className="min-h-screen bg-bg-matte flex flex-col items-center justify-center p-6 bg-noise relative">
+      <div className="min-h-screen bg-bg-matte flex flex-col items-center justify-center p-4 md:p-6 bg-noise relative">
         <a 
           href="/" 
-          className="absolute top-8 right-8 p-3 glass-card rounded-full text-brand-red hover:bg-brand-red hover:text-black transition-all z-50 group"
+          className="absolute top-4 right-4 md:top-8 md:right-8 p-2 md:p-3 glass-card rounded-full text-brand-red hover:bg-brand-red hover:text-black transition-all z-50 group"
           title="Return to Home"
         >
-          <X size={24} className="group-hover:rotate-90 transition-transform duration-300" />
+          <X size={20} className="md:w-6 md:h-6 group-hover:rotate-90 transition-transform duration-300" />
         </a>
 
-        <BrandLogo className="text-4xl mb-12" />
+        <BrandLogo className="text-3xl md:text-4xl mb-8 md:mb-12" />
         
-        <div className="w-full max-w-md glass-card p-10 rounded-2xl relative overflow-hidden">
+        <div className="w-full max-w-md glass-card p-6 md:p-10 rounded-2xl relative overflow-hidden">
           <AnimatePresence mode="wait">
             {step === 1 ? (
               <motion.form
@@ -96,7 +96,7 @@ export function AdminPanel() {
                     required
                     value={email}
                     onChange={e => setEmail(e.target.value)}
-                    className="w-full bg-bg-secondary border border-brand-red/20 p-4 rounded-sm text-brand-red focus:border-brand-red outline-none"
+                    className="w-full bg-bg-secondary border border-brand-red/20 p-3 md:p-4 rounded-sm text-brand-red focus:border-brand-red outline-none text-sm md:text-base"
                   />
                   <input
                     type="tel"
@@ -104,7 +104,7 @@ export function AdminPanel() {
                     required
                     value={phone}
                     onChange={e => setPhone(e.target.value)}
-                    className="w-full bg-bg-secondary border border-brand-red/20 p-4 rounded-sm text-brand-red focus:border-brand-red outline-none"
+                    className="w-full bg-bg-secondary border border-brand-red/20 p-3 md:p-4 rounded-sm text-brand-red focus:border-brand-red outline-none text-sm md:text-base"
                   />
                 </div>
 
@@ -141,7 +141,7 @@ export function AdminPanel() {
                     placeholder="......"
                     value={pin}
                     onChange={e => setPin(e.target.value)}
-                    className="w-full text-center bg-bg-secondary border border-brand-red/20 p-4 rounded-sm text-brand-red focus:border-brand-red outline-none text-2xl tracking-[12px] font-bold"
+                    className="w-full text-center bg-bg-secondary border border-brand-red/20 p-3 md:p-4 rounded-sm text-brand-red focus:border-brand-red outline-none text-xl md:text-2xl tracking-[8px] md:tracking-[12px] font-bold"
                   />
                 </div>
 
@@ -170,6 +170,7 @@ export function AdminPanel() {
 
 function AdminDashboard({ onLogout }: { onLogout: () => void }) {
   const [activeTab, setActiveTab] = useState<'videos' | 'reviews' | 'queries' | 'messages' | 'settings'>('videos');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [videos, setVideos] = useState<any[]>([]);
   const [reviews, setReviews] = useState<any[]>([]);
   const [queries, setQueries] = useState<any[]>([]);
@@ -383,16 +384,36 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
   ] as const;
 
   return (
-    <div className="min-h-screen bg-bg-matte flex">
+    <div className="min-h-screen bg-bg-matte flex flex-col md:flex-row h-screen overflow-hidden">
+      {/* Mobile Header */}
+      <header className="md:hidden flex items-center justify-between px-6 py-4 border-b border-brand-red/10 bg-bg-matte shrink-0 z-50">
+        <BrandLogo className="text-xl" />
+        <button 
+          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          className="p-2 text-brand-red hover:bg-brand-red/5 rounded-lg active:scale-95 transition-all"
+        >
+          {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+        </button>
+      </header>
+
       {/* Sidebar */}
-      <aside className="w-64 border-r border-brand-red/10 flex flex-col p-6 space-y-12 shrink-0">
-        <BrandLogo className="text-2xl" />
+      <aside className={`
+        fixed inset-y-0 left-0 z-40 w-64 bg-bg-matte border-r border-brand-red/10 flex flex-col p-6 space-y-12 shrink-0
+        transition-transform duration-300 md:translate-x-0 md:relative
+        ${isMobileMenuOpen ? 'translate-x-0 shadow-[0_0_40px_rgba(0,0,0,0.8)]' : '-translate-x-full'}
+      `}>
+        <div className="hidden md:block">
+          <BrandLogo className="text-2xl" />
+        </div>
         
         <nav className="flex flex-col gap-2">
           {TABS.map(tab => (
             <button
                key={tab.id}
-               onClick={() => setActiveTab(tab.id)}
+               onClick={() => {
+                 setActiveTab(tab.id);
+                 setIsMobileMenuOpen(false);
+               }}
                className={`flex items-center gap-4 p-4 rounded-lg font-brand uppercase tracking-widest text-sm transition-all ${
                  activeTab === tab.id ? 'bg-brand-red text-black' : 'text-brand-red hover:bg-brand-red/5'
                }`}
@@ -412,14 +433,22 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
         </button>
       </aside>
 
+      {/* Backdrop for mobile */}
+      {isMobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-30 md:hidden"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
       {/* Main Area */}
-      <main className="flex-1 p-12 overflow-y-auto">
-        <header className="flex justify-between items-center mb-12">
-          <h1 className="font-brand text-5xl text-brand-red uppercase tracking-[4px]">{activeTab} Management</h1>
+      <main className="flex-1 p-6 md:p-12 overflow-y-auto">
+        <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8 md:mb-12">
+          <h1 className="font-brand text-3xl md:text-5xl text-brand-red uppercase tracking-[2px] md:tracking-[4px]">{activeTab} Management</h1>
           <div className="flex gap-4">
-             <div className="text-right">
+             <div className="text-left md:text-right">
                 <p className="text-text-muted text-[10px] uppercase tracking-widest">Total Items</p>
-                <p className="text-2xl font-brand text-brand-red">
+                <p className="text-xl md:text-2xl font-brand text-brand-red">
                   {activeTab === 'videos' ? videos.length : activeTab === 'reviews' ? reviews.length : activeTab === 'queries' ? queries.length : activeTab === 'messages' ? messages.length : '-'}
                 </p>
              </div>
@@ -427,12 +456,12 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
         </header>
 
         {activeTab === 'videos' && (
-          <div className="space-y-12">
-            <form onSubmit={handleAddVideo} className="glass-card p-8 rounded-xl grid grid-cols-2 lg:grid-cols-3 gap-6 relative overflow-hidden">
-              <h3 className="col-span-full font-brand text-xl text-brand-red uppercase tracking-widest flex items-center gap-3">
+          <div className="space-y-8 md:space-y-12">
+            <form onSubmit={handleAddVideo} className="glass-card p-6 md:p-8 rounded-xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 relative overflow-hidden">
+              <h3 className="col-span-full font-brand text-lg md:text-xl text-brand-red uppercase tracking-widest flex items-center gap-3">
                 <Plus size={20} /> Add New Project
               </h3>
-              <input value={newVideo.title} onChange={e => setNewVideo({...newVideo, title: e.target.value})} placeholder="Project Title" required className="bg-bg-secondary border border-brand-red/20 p-3 rounded text-brand-red outline-none" />
+              <input value={newVideo.title} onChange={e => setNewVideo({...newVideo, title: e.target.value})} placeholder="Project Title" required className="bg-bg-secondary border border-brand-red/20 p-3 rounded text-brand-red outline-none text-sm" />
               
               <div className="flex flex-col gap-2">
                 <input 
@@ -440,12 +469,12 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                   onChange={e => { setNewVideo({...newVideo, url: e.target.value}); if(e.target.value) setVideoFile(null); }} 
                   placeholder="URL (YouTube/Vimeo)" 
                   disabled={!!videoFile}
-                  className="bg-bg-secondary border border-brand-red/20 p-3 rounded text-brand-red outline-none disabled:opacity-50" 
+                  className="bg-bg-secondary border border-brand-red/20 p-3 rounded text-brand-red outline-none disabled:opacity-50 text-sm" 
                 />
                 <p className="text-[9px] text-text-muted uppercase tracking-wider">OR UPLOAD FILE BELOW</p>
               </div>
 
-              <select value={newVideo.category} onChange={e => setNewVideo({...newVideo, category: e.target.value})} className="bg-bg-secondary border border-brand-red/20 p-3 rounded text-brand-red outline-none">
+              <select value={newVideo.category} onChange={e => setNewVideo({...newVideo, category: e.target.value})} className="bg-bg-secondary border border-brand-red/20 p-3 rounded text-brand-red outline-none text-sm">
                 <option>YouTube</option>
                 <option>Reels</option>
                 <option>Commercials</option>
@@ -453,7 +482,7 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                 <option>Motion Graphics</option>
               </select>
               
-              <div className="col-span-full border-2 border-dashed border-brand-red/10 p-6 rounded-lg flex flex-col items-center justify-center bg-black/20 gap-3">
+              <div className="col-span-full border-2 border-dashed border-brand-red/10 p-4 md:p-6 rounded-lg flex flex-col items-center justify-center bg-black/20 gap-3">
                  <input 
                    type="file" 
                    ref={videoInputRef} 
@@ -462,33 +491,33 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                    className="hidden" 
                  />
                  {videoFile ? (
-                   <div className="flex items-center gap-4 text-brand-red">
-                     <CheckCircle2 size={24} />
-                     <div className="text-left">
-                       <p className="text-sm font-bold truncate max-w-[200px]">{videoFile.name}</p>
+                   <div className="flex items-center gap-4 text-brand-red w-full justify-center">
+                     <CheckCircle2 size={24} className="shrink-0" />
+                     <div className="text-left overflow-hidden">
+                       <p className="text-sm font-bold truncate max-w-[150px] md:max-w-[200px]">{videoFile.name}</p>
                        <p className="text-[10px] text-text-muted uppercase">{(videoFile.size / (1024 * 1024)).toFixed(2)} MB</p>
                      </div>
-                     <button type="button" onClick={() => setVideoFile(null)} className="p-2 hover:bg-brand-red/10 rounded"><X size={16} /></button>
+                     <button type="button" onClick={() => setVideoFile(null)} className="p-2 hover:bg-brand-red/10 rounded shrink-0"><X size={16} /></button>
                    </div>
                  ) : (
                    <button 
                      type="button" 
                      onClick={() => videoInputRef.current?.click()}
-                     className="flex flex-col items-center gap-2 group"
+                     className="flex flex-col items-center gap-2 group w-full"
                    >
                      <Upload className="text-brand-red/40 group-hover:text-brand-red transition-colors" size={32} />
-                     <p className="text-[10px] text-text-muted group-hover:text-brand-red transition-colors uppercase tracking-widest font-brand">Click to Upload Video File</p>
+                     <p className="text-[10px] text-text-muted group-hover:text-brand-red transition-colors uppercase tracking-widest font-brand text-center">Click to Upload Video File</p>
                    </button>
                  )}
               </div>
 
-              <input value={newVideo.duration} onChange={e => setNewVideo({...newVideo, duration: e.target.value})} placeholder="Duration (e.g. 2:34)" className="bg-bg-secondary border border-brand-red/20 p-3 rounded text-brand-red outline-none" />
-              <textarea value={newVideo.description} onChange={e => setNewVideo({...newVideo, description: e.target.value})} placeholder="Short Description" className="col-span-full bg-bg-secondary border border-brand-red/20 p-3 rounded text-brand-red outline-none" />
+              <input value={newVideo.duration} onChange={e => setNewVideo({...newVideo, duration: e.target.value})} placeholder="Duration (e.g. 2:34)" className="bg-bg-secondary border border-brand-red/20 p-3 rounded text-brand-red outline-none text-sm" />
+              <textarea value={newVideo.description} onChange={e => setNewVideo({...newVideo, description: e.target.value})} placeholder="Short Description" className="col-span-full bg-bg-secondary border border-brand-red/20 p-3 rounded text-brand-red outline-none text-sm" />
               
               <button 
                 type="submit" 
                 disabled={isAddingVideo || isVideoUploading}
-                className="col-span-full py-4 bg-brand-red text-black font-brand uppercase tracking-widest hover:bg-brand-red-dark disabled:opacity-50 flex items-center justify-center gap-2"
+                className="col-span-full py-4 bg-brand-red text-black font-brand uppercase tracking-widest hover:bg-brand-red-dark disabled:opacity-50 flex items-center justify-center gap-2 text-sm md:text-base"
               >
                 {isVideoUploading ? (
                   <>
@@ -497,12 +526,13 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                       transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
                       className="w-4 h-4 border-2 border-black border-t-transparent rounded-full"
                     />
-                    Uploading Video ({videoUploadProgress}%)
+                    Uploading ({videoUploadProgress}%)
                   </>
                 ) : isAddingVideo ? (
-                  'Saving Project...'
+                  'Saving...'
                 ) : 'Upload to Portfolio'}
               </button>
+
 
               <AnimatePresence>
                 {videoSuccess && (
@@ -518,19 +548,19 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
               </AnimatePresence>
             </form>
 
-            <div className="grid gap-4">
+            <div className="grid gap-3 md:gap-4 font-sans">
               {videos.map(v => (
-                <div key={v.id} className="glass-card p-4 rounded-lg flex items-center justify-between group">
-                  <div className="flex items-center gap-6">
-                    <div className="w-20 aspect-video bg-black rounded border border-brand-red/20 overflow-hidden">
+                <div key={v.id} className="glass-card p-3 md:p-4 rounded-lg flex flex-col sm:flex-row items-center justify-between group gap-4 md:gap-0">
+                  <div className="flex items-center gap-4 md:gap-6 w-full">
+                    <div className="w-24 md:w-20 aspect-video bg-black rounded border border-brand-red/20 overflow-hidden shrink-0">
                       <img src={`https://img.youtube.com/vi/${v.url.split('v=')[1]?.split('&')[0] || v.url.split('/').pop()}/mqdefault.jpg`} className="w-full h-full object-cover" />
                     </div>
-                    <div>
-                      <h4 className="text-brand-red font-brand uppercase tracking-wider">{v.title}</h4>
-                      <p className="text-[10px] text-text-muted uppercase tracking-widest">{v.category} • {v.duration || 'N/A'}</p>
+                    <div className="overflow-hidden">
+                      <h4 className="text-brand-red font-brand uppercase tracking-wider text-sm md:text-base truncate">{v.title}</h4>
+                      <p className="text-[9px] md:text-[10px] text-text-muted uppercase tracking-widest">{v.category} • {v.duration || 'N/A'}</p>
                     </div>
                   </div>
-                  <div className="flex gap-4 opacity-0 group-hover:opacity-100 transition-all">
+                  <div className="flex gap-2 md:gap-4 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-all w-full sm:w-auto justify-end border-t sm:border-0 border-brand-red/10 pt-2 sm:pt-0">
                     <a href={v.url} target="_blank" className="p-2 text-brand-red hover:bg-brand-red/10 rounded"><ExternalLink size={18} /></a>
                     <button onClick={() => handleDelete('videos', v.id)} className="p-2 text-brand-red hover:bg-brand-red/10 rounded"><Trash2 size={18} /></button>
                   </div>
@@ -541,60 +571,60 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
         )}
 
         {activeTab === 'reviews' && (
-          <div className="grid gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
             {reviews.map(r => (
-              <div key={r.id} className="glass-card p-6 rounded-xl space-y-4">
-                <div className="flex justify-between">
-                   <div>
-                     <h4 className="text-brand-red font-brand text-xl uppercase tracking-widest">{r.name}</h4>
+              <div key={r.id} className="glass-card p-5 md:p-6 rounded-xl space-y-4">
+                <div className="flex justify-between items-start">
+                   <div className="overflow-hidden">
+                     <h4 className="text-brand-red font-brand text-lg md:text-xl uppercase tracking-widest truncate">{r.name}</h4>
                      <div className="flex gap-1 mt-1">
                         {[...Array(5)].map((_, i) => <Star key={i} size={12} className={i < r.rating ? 'fill-brand-red text-brand-red' : 'text-brand-red/20'} />)}
                      </div>
                    </div>
-                   <button onClick={() => handleDelete('reviews', r.id)} className="text-brand-red hover:scale-110"><Trash2 size={18} /></button>
+                   <button onClick={() => handleDelete('reviews', r.id)} className="text-brand-red hover:scale-110 p-2"><Trash2 size={18} /></button>
                 </div>
-                <p className="text-brand-red/80 font-sans text-sm">{r.text}</p>
+                <p className="text-brand-red/80 font-sans text-sm line-clamp-4">{r.text}</p>
               </div>
             ))}
           </div>
         )}
 
         {activeTab === 'queries' && (
-          <div className="grid gap-6">
+          <div className="grid gap-4 md:gap-6">
             {queries.map(q => (
-              <div key={q.id} className="glass-card p-8 rounded-xl border-l-[6px] border-l-brand-red space-y-6">
-                <div className="flex justify-between items-start">
+              <div key={q.id} className="glass-card p-6 md:p-8 rounded-xl border-l-4 md:border-l-[6px] border-l-brand-red space-y-6">
+                <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
                   <div>
-                    <h4 className="text-brand-red font-brand text-2xl uppercase tracking-widest">{q.name}</h4>
-                    <p className="text-xs text-text-muted uppercase tracking-[3px] mt-1">{q.projectType}</p>
+                    <h4 className="text-brand-red font-brand text-xl md:text-2xl uppercase tracking-widest">{q.name}</h4>
+                    <p className="text-[10px] text-text-muted uppercase tracking-[2px] md:tracking-[3px] mt-1">{q.projectType}</p>
                   </div>
-                  <div className="text-right">
-                    <p className="text-2xl font-brand text-brand-red">₹{q.budget.toLocaleString()}</p>
+                  <div className="text-left sm:text-right w-full sm:w-auto border-t sm:border-0 border-brand-red/10 pt-4 sm:pt-0">
+                    <p className="text-xl md:text-2xl font-brand text-brand-red">₹{q.budget.toLocaleString()}</p>
                     <p className="text-[10px] text-text-muted uppercase tracking-widest">Budget</p>
                   </div>
                 </div>
                 
-                <div className="grid grid-cols-2 gap-8 text-sm border-t border-brand-red/10 pt-6">
-                   <div className="space-y-1">
-                      <p className="text-[10px] text-text-muted uppercase tracking-widest">Contact</p>
-                      <p className="text-brand-red">{q.email}</p>
-                      <p className="text-brand-red">{q.phone}</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 md:gap-8 text-sm border-t border-brand-red/10 pt-6">
+                   <div className="space-y-2">
+                      <p className="text-[10px] text-text-muted uppercase tracking-widest">Contact Information</p>
+                      <p className="text-brand-red font-sans">{q.email}</p>
+                      <p className="text-brand-red font-sans">{q.phone}</p>
                    </div>
-                   <div className="space-y-1 text-right">
-                      <p className="text-[10px] text-text-muted uppercase tracking-widest">Deadline</p>
+                   <div className="space-y-2 sm:text-right">
+                      <p className="text-[10px] text-text-muted uppercase tracking-widest">Project Timeline</p>
                       <p className="text-brand-red font-brand">{q.deadline || 'flexible'}</p>
                       <p className="text-[10px] text-text-muted uppercase tracking-widest mt-2">Source</p>
-                      <p className="text-brand-red text-xs">{q.source}</p>
+                      <p className="text-brand-red text-xs font-sans italic">{q.source}</p>
                    </div>
                 </div>
 
-                <div className="bg-black/40 p-6 rounded-lg border border-brand-red/10">
-                   <p className="text-[10px] text-text-muted uppercase tracking-widest mb-3">Requirements</p>
-                   <p className="text-brand-red/90 text-sm whitespace-pre-wrap">{q.requirements}</p>
+                <div className="bg-black/40 p-4 md:p-6 rounded-lg border border-brand-red/10">
+                   <p className="text-[10px] text-text-muted uppercase tracking-widest mb-3">Requirements & Brief</p>
+                   <p className="text-brand-red/90 text-sm whitespace-pre-wrap font-sans leading-relaxed">{q.requirements}</p>
                 </div>
                 
                 <div className="flex justify-end gap-4">
-                   <button onClick={() => handleDelete('queries', q.id)} className="px-6 py-2 border border-brand-red/30 text-brand-red font-brand text-xs uppercase tracking-widest rounded hover:bg-brand-red hover:text-black transition-all">Delete Entry</button>
+                   <button onClick={() => handleDelete('queries', q.id)} className="w-full sm:w-auto px-6 py-3 border border-brand-red/30 text-brand-red font-brand text-xs uppercase tracking-widest rounded hover:bg-brand-red hover:text-black transition-all">Delete Entry</button>
                 </div>
               </div>
             ))}
@@ -602,19 +632,19 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
         )}
 
         {activeTab === 'messages' && (
-          <div className="grid gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 font-sans">
             {messages.map(m => (
-              <div key={m.id} className="glass-card p-6 rounded-xl space-y-4">
-                <div className="flex justify-between">
-                  <div>
-                    <h4 className="text-brand-red font-brand text-xl uppercase tracking-widest">{m.name}</h4>
-                    <p className="text-xs text-text-muted">{m.email}</p>
+              <div key={m.id} className="glass-card p-5 md:p-6 rounded-xl space-y-4">
+                <div className="flex justify-between items-start gap-4">
+                  <div className="overflow-hidden">
+                    <h4 className="text-brand-red font-brand text-lg md:text-xl uppercase tracking-widest truncate">{m.name}</h4>
+                    <p className="text-[10px] text-text-muted truncate">{m.email}</p>
                   </div>
-                  <button onClick={() => handleDelete('messages', m.id)} className="text-brand-red hover:scale-110"><Trash2 size={18} /></button>
+                  <button onClick={() => handleDelete('messages', m.id)} className="text-brand-red hover:scale-110 p-2 shrink-0"><Trash2 size={18} /></button>
                 </div>
                 <div className="pt-4 border-t border-brand-red/10">
-                   <p className="text-[10px] text-text-muted uppercase tracking-widest mb-1">Subject: {m.subject}</p>
-                   <p className="text-brand-red/80 text-sm">{m.message}</p>
+                   <p className="text-[10px] text-text-muted uppercase tracking-widest mb-1">Subject: {m.subject || 'General Inquiry'}</p>
+                   <p className="text-brand-red/80 text-sm leading-relaxed">{m.message}</p>
                 </div>
               </div>
             ))}
@@ -622,190 +652,191 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
         )}
 
         {activeTab === 'settings' && (
-          <div id="photo-upload-section" className="bg-[#141414] border border-brand-red/25 rounded-xl p-8 max-w-[420px] shadow-2xl">
-            <h3 id="photo-upload-title" className="font-brand text-[#B22C3E] text-[18px] tracking-[3px] uppercase mb-5">PROFILE PHOTO</h3>
-            
-            {/* Current photo preview */}
-            <div id="photo-preview-wrap" className="w-[200px] h-[266px] rounded-xl overflow-hidden border-2 border-brand-red/35 mx-auto mb-5 bg-[#0a0a0a] flex items-center justify-center relative shadow-[0_0_20px_rgba(178,44,62,0.1)]">
-              {/* Background Placeholder */}
-              <div className="absolute inset-0 flex items-center justify-center font-brand text-[56px] text-[#B22C3E]">
-                <span>RJ</span>
-              </div>
-
-              {(previewURL || photoURL) && (
-                <img 
-                  id="photo-preview-img" 
-                  src={previewURL || photoURL || ''} 
-                  alt="Profile photo preview"
-                  style={{ opacity: 0 }}
-                  className="absolute inset-0 w-full h-full object-cover object-top transition-opacity duration-500"
-                  referrerPolicy="no-referrer"
-                  onLoad={(e) => {
-                    (e.target as HTMLImageElement).style.opacity = '1';
-                  }}
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).style.opacity = '0';
-                  }}
-                />
-              )}
-            </div>
-
-            {/* Upload controls */}
-            <input 
-              type="file" 
-              ref={fileInputRef}
-              onChange={handleFileSelect}
-              accept="image/*"
-              className="hidden"
-            />
-            
-            <button 
-              id="photo-select-btn" 
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="w-full h-12 bg-transparent border-1.5 border-[#B22C3E] text-[#B22C3E] font-brand text-sm tracking-[2px] rounded-md transition-all hover:bg-[#B22C3E] hover:text-black mb-3"
-            >
-              SELECT PHOTO
-            </button>
-
-            {selectedFile && !isUploading && (
-              <div id="photo-file-info" className="font-sans text-[12px] text-[#B22C3E]/70 text-center mb-3">
-                {selectedFile.name} ({(selectedFile.size / (1024 * 1024)).toFixed(2)} MB)
-              </div>
-            )}
-
-            {/* Progress bar */}
-            {(isUploading) && (
-              <div className="mb-3">
-                <div id="photo-progress-wrap" className="w-full bg-[#1a1a1a] rounded-full h-2 mb-2 overflow-hidden relative">
-                  <motion.div 
-                    id="photo-progress-bar" 
-                    initial={{ width: 0 }}
-                    animate={{ width: `${uploadProgress}%` }}
-                    className="h-full bg-[#B22C3E] rounded-full transition-all duration-300"
-                  />
-                </div>
-                <span id="photo-progress-text" className="font-sans text-[12px] text-[#B22C3E] block text-center">
-                  {processingMsg}
-                </span>
-              </div>
-            )}
-
-            {/* Action buttons */}
-            {selectedFile && !isUploading && (
-              <div id="photo-action-btns" className="flex gap-2">
-                <button 
-                  id="photo-upload-btn" 
-                  type="button"
-                  onClick={handlePhotoUpload}
-                  className="flex-1 h-12 bg-[#B22C3E] text-black font-brand text-sm tracking-[2px] rounded-md transition-colors hover:bg-[#8a1e2a]"
-                >
-                  UPLOAD PHOTO
-                </button>
-                <button 
-                  id="photo-cancel-btn" 
-                  type="button"
-                  onClick={() => { setSelectedFile(null); setPreviewURL(null); }}
-                  className="flex-1 h-12 bg-transparent border border-white/10 text-[#B22C3E]/60 font-brand text-sm tracking-[2px] rounded-md"
-                >
-                  CANCEL
-                </button>
-              </div>
-            )}
-
-            {/* Status messages */}
-            {uploadStatus === 'success' && (
-              <motion.div 
-                id="photo-status-msg" 
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="success font-sans text-[13px] text-center p-3 rounded-md mt-3 text-[#22c55e] bg-[#22c55e]/10 border border-[#22c55e]/20"
-              >
-                ✓ Profile photo updated successfully!
-              </motion.div>
-            )}
-
-            {/* Manual URL Input */}
-            <div className="mt-8 pt-8 border-t border-brand-red/10">
-              <p className="font-brand text-[10px] text-brand-red uppercase tracking-[3px] mb-1">SET PHOTO VIA LINK</p>
-              <p className="text-[10px] text-text-muted mb-3 uppercase tracking-widest">Supports Google Drive, ImgBB, Cloudinary</p>
+          <div className="flex justify-start">
+            <div id="photo-upload-section" className="bg-[#141414] border border-brand-red/25 rounded-xl p-6 md:p-8 w-full max-w-[420px] shadow-2xl">
+              <h3 id="photo-upload-title" className="font-brand text-[#B22C3E] text-[16px] md:text-[18px] tracking-[3px] uppercase mb-5">PROFILE PHOTO</h3>
               
-              <div className="flex flex-col gap-3">
-                <div className="flex gap-2">
-                  <div className="flex-1 relative">
-                    <input 
-                      type="text"
-                      value={manualURL}
-                      onChange={(e) => {
-                        setManualURL(e.target.value);
-                        setUploadError('');
-                      }}
-                      placeholder="Paste image link here"
-                      className="w-full bg-bg-secondary border border-brand-red/20 p-3 rounded text-brand-red outline-none text-xs focus:border-brand-red/50 transition-colors"
-                    />
-                    {manualURL && (
-                      <button 
-                        onClick={() => setManualURL('')}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-brand-red transition-colors"
-                      >
-                        <X size={14} />
-                      </button>
-                    )}
-                  </div>
-                  <button 
-                    onClick={handleManualURLUpdate}
-                    disabled={isLoadingSettings || !manualURL}
-                    className="px-6 bg-brand-red text-black font-brand text-[11px] tracking-widest rounded-md transition-all hover:bg-brand-red-dark hover:scale-105 active:scale-95 disabled:opacity-30 disabled:hover:scale-100 flex items-center justify-center gap-2"
-                  >
-                    {isLoadingSettings ? (
-                      <div className="w-3 h-3 border-2 border-black/30 border-t-black animate-spin rounded-full" />
-                    ) : 'SAVE'}
-                  </button>
+              {/* Current photo preview */}
+              <div id="photo-preview-wrap" className="w-full aspect-[3/4] max-w-[200px] rounded-xl overflow-hidden border-2 border-brand-red/35 mx-auto mb-5 bg-[#0a0a0a] flex items-center justify-center relative shadow-[0_0_20px_rgba(178,44,62,0.1)]">
+                {/* Background Placeholder */}
+                <div className="absolute inset-0 flex items-center justify-center font-brand text-[48px] md:text-[56px] text-[#B22C3E]">
+                  <span>RJ</span>
                 </div>
 
-                {/* Live Preview of the pasted URL */}
-                {manualURL && manualURL.length > 10 && (
-                  <div className="p-3 bg-black/40 border border-brand-red/10 rounded overflow-hidden">
-                    <p className="text-[9px] text-text-muted uppercase tracking-widest mb-2">Live Preview:</p>
-                    <div className="aspect-[3/4] max-h-[150px] mx-auto bg-black rounded relative overflow-hidden flex items-center justify-center">
-                      <img 
-                        src={manualURL.trim().includes('drive.google.com') ? `https://lh3.googleusercontent.com/d/${(manualURL.match(/\/d\/([a-zA-Z0-9_-]+)/) || manualURL.match(/[?&]id=([a-zA-Z0-9_-]+)/))?.[1] || ''}` : manualURL.trim()} 
-                        alt="Preview"
-                        className="max-w-full max-h-full object-contain"
-                        onError={(e) => {
-                          const target = e.target as HTMLImageElement;
-                          target.style.display = 'none';
-                        }}
-                        onLoad={(e) => {
-                          const target = e.target as HTMLImageElement;
-                          target.style.display = 'block';
-                        }}
-                      />
-                      <div className="absolute inset-0 flex items-center justify-center -z-10 bg-brand-red/5">
-                        <AlertCircle className="text-brand-red/20" size={24} />
-                      </div>
-                    </div>
-                    <p className="text-[8px] text-text-muted mt-1 text-center italic uppercase">If you don't see a preview above, the link might be private or invalid.</p>
-                  </div>
+                {(previewURL || photoURL) && (
+                  <img 
+                    id="photo-preview-img" 
+                    src={previewURL || photoURL || ''} 
+                    alt="Profile photo preview"
+                    style={{ opacity: 0 }}
+                    className="absolute inset-0 w-full h-full object-cover object-top transition-opacity duration-500"
+                    referrerPolicy="no-referrer"
+                    onLoad={(e) => {
+                      (e.target as HTMLImageElement).style.opacity = '1';
+                    }}
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.opacity = '0';
+                    }}
+                  />
                 )}
               </div>
 
-              {uploadError && (
-                <p className="text-[10px] text-brand-red mt-2 uppercase tracking-tight flex items-center gap-1">
-                  <AlertCircle size={10} /> {uploadError}
-                </p>
+              {/* Upload controls */}
+              <input 
+                type="file" 
+                ref={fileInputRef}
+                onChange={handleFileSelect}
+                accept="image/*"
+                className="hidden"
+              />
+              
+              <button 
+                id="photo-select-btn" 
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full h-12 bg-transparent border-1.5 border-[#B22C3E] text-[#B22C3E] font-brand text-xs md:text-sm tracking-[2px] rounded-md transition-all hover:bg-[#B22C3E] hover:text-black mb-3 active:scale-[0.98]"
+              >
+                SELECT PHOTO
+              </button>
+
+              {selectedFile && !isUploading && (
+                <div id="photo-file-info" className="font-sans text-[10px] md:text-[12px] text-[#B22C3E]/70 text-center mb-3 truncate px-2">
+                  {selectedFile.name} ({(selectedFile.size / (1024 * 1024)).toFixed(2)} MB)
+                </div>
               )}
 
-              <div className="mt-4 p-4 bg-brand-red/5 border border-brand-red/10 rounded-lg group hover:border-brand-red/20 transition-colors">
-                <h4 className="text-[10px] text-brand-red font-bold uppercase tracking-wider mb-2 flex items-center gap-2">
-                  <div className="w-1 h-1 bg-brand-red rounded-full" />
-                  Auto-Convert Google Drive Links
-                </h4>
-                <ol className="text-[9px] text-text-muted space-y-2 list-decimal ml-4 uppercase tracking-tighter">
-                  <li>Set Drive photo to <span className="text-brand-red">"Anyone with the link"</span></li>
-                  <li>Copy the Link and paste it here</li>
-                  <li>Link will be <span className="text-white">auto-converted</span> for web display</li>
-                </ol>
+              {/* Progress bar */}
+              {(isUploading) && (
+                <div className="mb-3">
+                  <div id="photo-progress-wrap" className="w-full bg-[#1a1a1a] rounded-full h-1.5 md:h-2 mb-2 overflow-hidden relative">
+                    <motion.div 
+                      id="photo-progress-bar" 
+                      initial={{ width: 0 }}
+                      animate={{ width: `${uploadProgress}%` }}
+                      className="h-full bg-[#B22C3E] rounded-full transition-all duration-300"
+                    />
+                  </div>
+                  <span id="photo-progress-text" className="font-sans text-[10px] md:text-[12px] text-[#B22C3E] block text-center uppercase tracking-widest">
+                    {processingMsg}
+                  </span>
+                </div>
+              )}
+
+              {/* Action buttons */}
+              {selectedFile && !isUploading && (
+                <div id="photo-action-btns" className="flex flex-col sm:flex-row gap-2">
+                  <button 
+                    id="photo-upload-btn" 
+                    type="button"
+                    onClick={handlePhotoUpload}
+                    className="flex-1 h-12 bg-[#B22C3E] text-black font-brand text-xs md:text-sm tracking-[2px] rounded-md transition-colors hover:bg-[#8a1e2a]"
+                  >
+                    UPLOAD
+                  </button>
+                  <button 
+                    id="photo-cancel-btn" 
+                    type="button"
+                    onClick={() => { setSelectedFile(null); setPreviewURL(null); }}
+                    className="flex-1 h-12 bg-transparent border border-white/10 text-[#B22C3E]/60 font-brand text-xs md:text-sm tracking-[2px] rounded-md"
+                  >
+                    CANCEL
+                  </button>
+                </div>
+              )}
+
+              {/* Status messages */}
+              {uploadStatus === 'success' && (
+                <motion.div 
+                  id="photo-status-msg" 
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="success font-sans text-xs md:text-[13px] text-center p-3 rounded-md mt-3 text-[#22c55e] bg-[#22c55e]/10 border border-[#22c55e]/20"
+                >
+                  ✓ Updated successfully!
+                </motion.div>
+              )}
+
+              {/* Manual URL Input */}
+              <div className="mt-6 md:mt-8 pt-6 md:pt-8 border-t border-brand-red/10">
+                <p className="font-brand text-[9px] md:text-[10px] text-brand-red uppercase tracking-[2px] md:tracking-[3px] mb-1">SET PHOTO VIA LINK</p>
+                <p className="text-[9px] md:text-[10px] text-text-muted mb-3 uppercase tracking-widest">Supports Drive, ImgBB, Cloudinary</p>
+                
+                <div className="flex flex-col gap-3">
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <div className="flex-1 relative">
+                      <input 
+                        type="text"
+                        value={manualURL}
+                        onChange={(e) => {
+                          setManualURL(e.target.value);
+                          setUploadError('');
+                        }}
+                        placeholder="Paste image link here"
+                        className="w-full bg-bg-secondary border border-brand-red/20 p-3 rounded text-brand-red outline-none text-xs focus:border-brand-red/50 transition-colors"
+                      />
+                      {manualURL && (
+                        <button 
+                          onClick={() => setManualURL('')}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-brand-red transition-colors"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+                    <button 
+                      onClick={handleManualURLUpdate}
+                      disabled={isLoadingSettings || !manualURL}
+                      className="px-6 h-10 sm:h-auto bg-brand-red text-black font-brand text-[11px] tracking-widest rounded-md transition-all hover:bg-brand-red-dark disabled:opacity-30 flex items-center justify-center gap-2"
+                    >
+                      {isLoadingSettings ? (
+                        <div className="w-3 h-3 border-2 border-black/30 border-t-black animate-spin rounded-full" />
+                      ) : 'SAVE'}
+                    </button>
+                  </div>
+
+                  {/* Live Preview of the pasted URL */}
+                  {manualURL && manualURL.length > 10 && (
+                    <div className="p-3 bg-black/40 border border-brand-red/10 rounded overflow-hidden">
+                      <p className="text-[9px] text-text-muted uppercase tracking-widest mb-2">Live Preview:</p>
+                      <div className="aspect-[3/4] max-h-[150px] mx-auto bg-black rounded relative overflow-hidden flex items-center justify-center">
+                        <img 
+                          src={manualURL.trim().includes('drive.google.com') ? `https://lh3.googleusercontent.com/d/${(manualURL.match(/\/d\/([a-zA-Z0-9_-]+)/) || manualURL.match(/[?&]id=([a-zA-Z0-9_-]+)/))?.[1] || ''}` : manualURL.trim()} 
+                          alt="Preview"
+                          className="max-w-full max-h-full object-contain"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                          }}
+                          onLoad={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'block';
+                          }}
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center -z-10 bg-brand-red/5">
+                          <AlertCircle className="text-brand-red/20" size={24} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {uploadError && (
+                  <p className="text-[10px] text-brand-red mt-2 uppercase tracking-tight flex items-center gap-1">
+                    <AlertCircle size={10} /> {uploadError}
+                  </p>
+                )}
+
+                <div className="mt-4 p-4 bg-brand-red/5 border border-brand-red/10 rounded-lg group hover:border-brand-red/20 transition-colors">
+                  <h4 className="text-[10px] text-brand-red font-bold uppercase tracking-wider mb-2 flex items-center gap-2">
+                    <div className="w-1 h-1 bg-brand-red rounded-full" />
+                    Help Tips
+                  </h4>
+                  <ol className="text-[9px] text-text-muted space-y-2 list-decimal ml-4 uppercase tracking-tighter">
+                    <li>Set Drive photo to <span className="text-brand-red">"Anyone with the link"</span></li>
+                    <li>Copy direct link from ImgBB/Cloudinary</li>
+                    <li>Direct links usually end with <span className="text-white">.jpg or .png</span></li>
+                  </ol>
+                </div>
               </div>
             </div>
           </div>
