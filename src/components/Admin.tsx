@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import type { FormEvent, ChangeEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Lock, LogOut, Video, MessageSquare, Briefcase, Plus, Trash2, Eye, ExternalLink, Star, X, Settings as SettingsIcon, Upload, CheckCircle2, AlertCircle, Menu } from 'lucide-react';
-import { collection, addDoc, deleteDoc, doc, onSnapshot, query, orderBy, serverTimestamp, setDoc } from 'firebase/firestore';
+import { Lock, LogOut, Video, MessageSquare, Briefcase, Plus, Trash2, Eye, ExternalLink, Star, X, Settings as SettingsIcon, Upload, CheckCircle2, AlertCircle, Menu, LayoutDashboard, Clock, User, Filter } from 'lucide-react';
+import { collection, addDoc, deleteDoc, doc, onSnapshot, query, orderBy, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { db, auth, storage } from '../lib/firebase';
@@ -169,7 +169,7 @@ export function AdminPanel() {
 }
 
 function AdminDashboard({ onLogout }: { onLogout: () => void }) {
-  const [activeTab, setActiveTab] = useState<'videos' | 'reviews' | 'queries' | 'messages' | 'settings'>('videos');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'videos' | 'reviews' | 'queries' | 'messages' | 'settings'>('dashboard');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [videos, setVideos] = useState<any[]>([]);
   const [reviews, setReviews] = useState<any[]>([]);
@@ -253,33 +253,32 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
   useEffect(() => {
     const unsubscribers: (() => void)[] = [];
 
-    if (activeTab === 'videos') {
-      const unsub = onSnapshot(query(collection(db, 'videos'), orderBy('createdAt', 'desc')), s => 
-        setVideos(s.docs.map(d => ({id: d.id, ...d.data()}))));
-      unsubscribers.push(unsub);
-    } else if (activeTab === 'reviews') {
-      const unsub = onSnapshot(query(collection(db, 'reviews'), orderBy('createdAt', 'desc')), s => 
-        setReviews(s.docs.map(d => ({id: d.id, ...d.data()}))));
-      unsubscribers.push(unsub);
-    } else if (activeTab === 'queries') {
-      const unsub = onSnapshot(query(collection(db, 'queries'), orderBy('createdAt', 'desc')), s => 
-        setQueries(s.docs.map(d => ({id: d.id, ...d.data()}))));
-      unsubscribers.push(unsub);
-    } else if (activeTab === 'messages') {
-      const unsub = onSnapshot(query(collection(db, 'messages'), orderBy('createdAt', 'desc')), s => 
-        setMessages(s.docs.map(d => ({id: d.id, ...d.data()}))));
-      unsubscribers.push(unsub);
-    } else if (activeTab === 'settings') {
-      const unsub = onSnapshot(doc(db, 'settings', 'profile'), doc => {
-         const data = doc.data();
-         setSettings(data);
-         setPhotoURL(data?.photoURL || null);
-      });
-      unsubscribers.push(unsub);
-    }
+    // Always fetch all data to support Dashboard stats and instant tab switching
+    const unsubVideos = onSnapshot(query(collection(db, 'videos'), orderBy('createdAt', 'desc')), s => 
+      setVideos(s.docs.map(d => ({id: d.id, ...d.data()}))));
+    unsubscribers.push(unsubVideos);
+
+    const unsubReviews = onSnapshot(query(collection(db, 'reviews'), orderBy('createdAt', 'desc')), s => 
+      setReviews(s.docs.map(d => ({id: d.id, ...d.data()}))));
+    unsubscribers.push(unsubReviews);
+
+    const unsubQueries = onSnapshot(query(collection(db, 'queries'), orderBy('createdAt', 'desc')), s => 
+      setQueries(s.docs.map(d => ({id: d.id, ...d.data()}))));
+    unsubscribers.push(unsubQueries);
+
+    const unsubMessages = onSnapshot(query(collection(db, 'messages'), orderBy('createdAt', 'desc')), s => 
+      setMessages(s.docs.map(d => ({id: d.id, ...d.data()}))));
+    unsubscribers.push(unsubMessages);
+
+    const unsubSettings = onSnapshot(doc(db, 'settings', 'profile'), doc => {
+       const data = doc.data();
+       setSettings(data);
+       setPhotoURL(data?.photoURL || null);
+    });
+    unsubscribers.push(unsubSettings);
     
     return () => unsubscribers.forEach(unsub => unsub());
-  }, [activeTab]);
+  }, []);
 
   const handleFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -375,13 +374,38 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
     }
   };
 
+  const updateQueryStatus = async (id: string, status: string) => {
+    try {
+      await updateDoc(doc(db, 'queries', id), { status });
+    } catch (err) {
+      console.error("Update status failed:", err);
+    }
+  };
+
   const TABS = [
+    { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { id: 'videos', icon: Video, label: 'Videos' },
     { id: 'reviews', icon: Star, label: 'Reviews' },
     { id: 'queries', icon: Briefcase, label: 'Queries' },
     { id: 'messages', icon: MessageSquare, label: 'Messages' },
     { id: 'settings', icon: SettingsIcon, label: 'Settings' },
   ] as const;
+
+  const formatDate = (timestamp: any) => {
+    if (!timestamp) return 'N/A';
+    try {
+      const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+      return date.toLocaleDateString(undefined, { 
+        day: 'numeric', 
+        month: 'short', 
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (e) {
+      return 'Invalid Date';
+    }
+  };
 
   return (
     <div className="min-h-screen bg-bg-matte flex flex-col md:flex-row h-screen overflow-hidden">
@@ -404,6 +428,13 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
       `}>
         <div className="hidden md:block">
           <BrandLogo className="text-2xl" />
+          <a 
+            href="/" 
+            className="mt-4 flex items-center gap-2 text-[10px] text-text-muted hover:text-brand-red font-brand uppercase tracking-[2px] transition-all group"
+          >
+            <div className="w-1 h-1 bg-brand-red rounded-full group-hover:scale-150 transition-transform" />
+            Back to Site
+          </a>
         </div>
         
         <nav className="flex flex-col gap-2">
@@ -422,6 +453,16 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
               {tab.label}
             </button>
           ))}
+          
+          <div className="md:hidden pt-4 border-t border-brand-red/10 mt-4">
+             <a 
+              href="/" 
+              className="flex items-center gap-4 p-4 text-brand-red hover:bg-brand-red/5 rounded-lg font-brand uppercase tracking-widest text-sm transition-all"
+            >
+              <X size={20} />
+              Return to Site
+            </a>
+          </div>
         </nav>
 
         <button 
@@ -444,16 +485,96 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
       {/* Main Area */}
       <main className="flex-1 p-6 md:p-12 overflow-y-auto">
         <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8 md:mb-12">
-          <h1 className="font-brand text-3xl md:text-5xl text-brand-red uppercase tracking-[2px] md:tracking-[4px]">{activeTab} Management</h1>
+          <div className="space-y-1">
+            <h1 className="font-brand text-3xl md:text-5xl text-brand-red uppercase tracking-[2px] md:tracking-[4px]">{activeTab === 'dashboard' ? 'Overview' : activeTab + ' Management'}</h1>
+            <div className="flex items-center gap-4">
+               <a href="/" className="text-[10px] text-text-muted hover:text-brand-red uppercase tracking-widest flex items-center gap-1 transition-colors">
+                  <ExternalLink size={12} /> View Live Website
+               </a>
+            </div>
+          </div>
           <div className="flex gap-4">
              <div className="text-left md:text-right">
-                <p className="text-text-muted text-[10px] uppercase tracking-widest">Total Items</p>
-                <p className="text-xl md:text-2xl font-brand text-brand-red">
-                  {activeTab === 'videos' ? videos.length : activeTab === 'reviews' ? reviews.length : activeTab === 'queries' ? queries.length : activeTab === 'messages' ? messages.length : '-'}
+                <p className="text-text-muted text-[10px] uppercase tracking-widest">Active Focus</p>
+                <p className="text-xl md:text-2xl font-brand text-brand-red uppercase">
+                   {activeTab}
                 </p>
              </div>
           </div>
         </header>
+
+        {activeTab === 'dashboard' && (
+          <div className="space-y-12">
+            {/* Stats Grid */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+               {[
+                 { label: 'Total Projects', value: videos.length, icon: Video, color: 'text-blue-400' },
+                 { label: 'Client Reviews', value: reviews.length, icon: Star, color: 'text-yellow-400' },
+                 { label: 'Pending Queries', value: queries.filter(q => q.status === 'pending').length, icon: Briefcase, color: 'text-brand-red' },
+                 { label: 'New Messages', value: messages.length, icon: MessageSquare, color: 'text-green-400' },
+               ].map((stat, i) => (
+                 <div key={i} className="glass-card p-6 md:p-8 rounded-xl relative overflow-hidden group">
+                    <stat.icon className={`absolute -right-4 -bottom-4 w-24 h-24 opacity-5 group-hover:scale-110 transition-transform duration-500`} />
+                    <p className="text-[10px] md:text-xs text-text-muted uppercase tracking-widest mb-1">{stat.label}</p>
+                    <p className="text-3xl md:text-4xl font-brand text-brand-red">{stat.value}</p>
+                 </div>
+               ))}
+            </div>
+
+            {/* Recent Activity Grid */}
+            <div className="grid lg:grid-cols-2 gap-8">
+               <div className="glass-card rounded-2xl overflow-hidden border border-brand-red/10">
+                  <div className="p-6 border-b border-brand-red/10 flex justify-between items-center">
+                    <h3 className="font-brand text-brand-red uppercase tracking-widest flex items-center gap-3">
+                       <Clock size={18} /> Recent Queries
+                    </h3>
+                    <button onClick={() => setActiveTab('queries')} className="text-[10px] text-text-muted uppercase tracking-widest hover:text-brand-red">View All</button>
+                  </div>
+                  <div className="p-2">
+                    {queries.slice(0, 5).map(q => (
+                      <div key={q.id} className="p-4 hover:bg-white/5 rounded-lg transition-colors flex justify-between items-center group">
+                        <div className="overflow-hidden">
+                          <p className="font-brand text-brand-red uppercase truncate">{q.name}</p>
+                          <p className="text-[10px] text-text-muted truncate">{q.projectType}</p>
+                        </div>
+                        <div className="text-right shrink-0">
+                           <span className={`text-[9px] uppercase tracking-widest px-2 py-1 rounded-full border ${
+                             q.status === 'pending' ? 'border-brand-red text-brand-red animate-pulse' : 'border-green-500 text-green-500'
+                           }`}>
+                             {q.status || 'pending'}
+                           </span>
+                        </div>
+                      </div>
+                    ))}
+                    {queries.length === 0 && <p className="p-8 text-center text-text-muted text-sm font-brand uppercase tracking-widest opacity-50 italic">No queries yet</p>}
+                  </div>
+               </div>
+
+               <div className="glass-card rounded-2xl overflow-hidden border border-brand-red/10">
+                  <div className="p-6 border-b border-brand-red/10 flex justify-between items-center">
+                    <h3 className="font-brand text-brand-red uppercase tracking-widest flex items-center gap-3">
+                       <User size={18} /> New Messages
+                    </h3>
+                    <button onClick={() => setActiveTab('messages')} className="text-[10px] text-text-muted uppercase tracking-widest hover:text-brand-red">View All</button>
+                  </div>
+                  <div className="p-2">
+                    {messages.slice(0, 5).map(m => (
+                      <div key={m.id} className="p-4 hover:bg-white/5 rounded-lg transition-colors flex justify-between items-center group">
+                        <div className="overflow-hidden">
+                          <p className="font-brand text-brand-red uppercase truncate">{m.name}</p>
+                          <p className="text-[10px] text-text-muted truncate">{m.subject || 'General Inquiry'}</p>
+                        </div>
+                        <div className="text-right text-[10px] text-text-muted uppercase tracking-tighter">
+                          {formatDate(m.createdAt).split(',')[0]}
+                        </div>
+                      </div>
+                    ))}
+                    {messages.length === 0 && <p className="p-8 text-center text-text-muted text-sm font-brand uppercase tracking-widest opacity-50 italic">No messages yet</p>}
+                  </div>
+               </div>
+            </div>
+          </div>
+        )}
 
         {activeTab === 'videos' && (
           <div className="space-y-8 md:space-y-12">
@@ -573,81 +694,167 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
         {activeTab === 'reviews' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
             {reviews.map(r => (
-              <div key={r.id} className="glass-card p-5 md:p-6 rounded-xl space-y-4">
-                <div className="flex justify-between items-start">
-                   <div className="overflow-hidden">
-                     <h4 className="text-brand-red font-brand text-lg md:text-xl uppercase tracking-widest truncate">{r.name}</h4>
-                     <div className="flex gap-1 mt-1">
+              <div key={r.id} className="glass-card p-5 md:p-6 rounded-xl space-y-4 flex flex-col justify-between">
+                <div>
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="overflow-hidden">
+                      <h4 className="text-brand-red font-brand text-lg md:text-xl uppercase tracking-widest truncate">{r.name}</h4>
+                      <div className="flex gap-1 mt-1">
                         {[...Array(5)].map((_, i) => <Star key={i} size={12} className={i < r.rating ? 'fill-brand-red text-brand-red' : 'text-brand-red/20'} />)}
-                     </div>
-                   </div>
-                   <button onClick={() => handleDelete('reviews', r.id)} className="text-brand-red hover:scale-110 p-2"><Trash2 size={18} /></button>
+                      </div>
+                    </div>
+                    <button onClick={() => handleDelete('reviews', r.id)} className="text-brand-red hover:scale-110 p-2 shrink-0"><Trash2 size={18} /></button>
+                  </div>
+                  <p className="text-brand-red/80 font-sans text-sm line-clamp-4 leading-relaxed italic">"{r.text}"</p>
                 </div>
-                <p className="text-brand-red/80 font-sans text-sm line-clamp-4">{r.text}</p>
+                <div className="pt-4 border-t border-brand-red/10 flex justify-between items-center">
+                   <p className="text-[9px] text-text-muted uppercase tracking-[2px]">Submitted</p>
+                   <p className="text-[9px] text-brand-red uppercase tracking-widest">{formatDate(r.createdAt)}</p>
+                </div>
               </div>
             ))}
+            {reviews.length === 0 && (
+              <div className="col-span-full py-20 glass-card rounded-2xl flex flex-col items-center justify-center text-center opacity-40">
+                 <Star size={48} className="mb-4 text-brand-red/50" />
+                 <p className="font-brand text-xl text-brand-red uppercase tracking-widest">No reviews found</p>
+              </div>
+            )}
           </div>
         )}
 
         {activeTab === 'queries' && (
           <div className="grid gap-4 md:gap-6">
             {queries.map(q => (
-              <div key={q.id} className="glass-card p-6 md:p-8 rounded-xl border-l-4 md:border-l-[6px] border-l-brand-red space-y-6">
+              <div key={q.id} className="glass-card p-6 md:p-8 rounded-xl border-l-4 md:border-l-[6px] border-l-brand-red space-y-6 relative overflow-hidden group">
+                <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                   <p className="text-[8px] text-text-muted uppercase tracking-[3px] font-bold">Ref ID: {q.id.slice(0, 8)}</p>
+                </div>
+
                 <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
-                  <div>
-                    <h4 className="text-brand-red font-brand text-xl md:text-2xl uppercase tracking-widest">{q.name}</h4>
-                    <p className="text-[10px] text-text-muted uppercase tracking-[2px] md:tracking-[3px] mt-1">{q.projectType}</p>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-1">
+                      <h4 className="text-brand-red font-brand text-xl md:text-2xl uppercase tracking-widest">{q.name}</h4>
+                      <div className="flex gap-2">
+                        {['pending', 'processing', 'completed', 'cancelled'].map(s => (
+                          <button
+                            key={s}
+                            onClick={() => updateQueryStatus(q.id, s)}
+                            className={`text-[8px] uppercase tracking-widest px-2 py-0.5 rounded border transition-all ${
+                              (q.status || 'pending') === s 
+                                ? 'bg-brand-red text-black border-brand-red font-bold animate-pulse' 
+                                : 'border-brand-red/20 text-brand-red/40 hover:border-brand-red/50 hover:text-brand-red'
+                            }`}
+                          >
+                            {s}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-text-muted uppercase tracking-[2px] md:tracking-[3px] flex items-center gap-2">
+                      <LayoutDashboard size={10} className="text-brand-red" />
+                      {q.projectType}
+                    </p>
                   </div>
                   <div className="text-left sm:text-right w-full sm:w-auto border-t sm:border-0 border-brand-red/10 pt-4 sm:pt-0">
                     <p className="text-xl md:text-2xl font-brand text-brand-red">₹{q.budget.toLocaleString()}</p>
-                    <p className="text-[10px] text-text-muted uppercase tracking-widest">Budget</p>
+                    <p className="text-[10px] text-text-muted uppercase tracking-widest">Project Budget</p>
                   </div>
                 </div>
                 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 md:gap-8 text-sm border-t border-brand-red/10 pt-6">
-                   <div className="space-y-2">
-                      <p className="text-[10px] text-text-muted uppercase tracking-widest">Contact Information</p>
-                      <p className="text-brand-red font-sans">{q.email}</p>
-                      <p className="text-brand-red font-sans">{q.phone}</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 md:gap-8 text-sm border-t border-brand-red/10 pt-6">
+                   <div className="space-y-3">
+                      <p className="text-[10px] text-text-muted uppercase tracking-widest flex items-center gap-2 italic">
+                        <User size={10} /> Contact Details
+                      </p>
+                      <div className="space-y-1">
+                        <p className="text-brand-red font-sans text-xs md:text-sm font-bold truncate">{q.email}</p>
+                        <p className="text-brand-red font-sans text-xs md:text-sm tracking-widest">{q.phone}</p>
+                      </div>
                    </div>
-                   <div className="space-y-2 sm:text-right">
-                      <p className="text-[10px] text-text-muted uppercase tracking-widest">Project Timeline</p>
-                      <p className="text-brand-red font-brand">{q.deadline || 'flexible'}</p>
-                      <p className="text-[10px] text-text-muted uppercase tracking-widest mt-2">Source</p>
-                      <p className="text-brand-red text-xs font-sans italic">{q.source}</p>
+                   <div className="space-y-3 sm:text-center md:text-left">
+                      <p className="text-[10px] text-text-muted uppercase tracking-widest flex items-center gap-2 italic justify-center md:justify-start">
+                        <Clock size={10} /> Timeline
+                      </p>
+                      <p className="text-brand-red font-brand text-lg tracking-widest">{q.deadline || 'flexible'}</p>
+                   </div>
+                   <div className="space-y-3 text-right">
+                      <p className="text-[10px] text-text-muted uppercase tracking-widest italic">Received At</p>
+                      <p className="text-brand-red/60 text-xs font-brand uppercase tracking-widest">{formatDate(q.createdAt)}</p>
+                      <p className="text-[8px] text-text-muted uppercase tracking-widest mt-2">Source: <span className="text-brand-red underline decoration-brand-red/30">{q.source}</span></p>
                    </div>
                 </div>
 
-                <div className="bg-black/40 p-4 md:p-6 rounded-lg border border-brand-red/10">
-                   <p className="text-[10px] text-text-muted uppercase tracking-widest mb-3">Requirements & Brief</p>
-                   <p className="text-brand-red/90 text-sm whitespace-pre-wrap font-sans leading-relaxed">{q.requirements}</p>
+                <div className="bg-black/60 p-5 md:p-7 rounded-xl border border-brand-red/10 group-hover:border-brand-red/30 transition-colors">
+                   <div className="flex items-center justify-between mb-4">
+                     <p className="text-[10px] text-text-muted uppercase tracking-widest flex items-center gap-2">
+                       <MessageSquare size={10} className="text-brand-red" />
+                       Brief & Technical Requirements
+                     </p>
+                     <div className="w-12 h-[1px] bg-brand-red/20" />
+                   </div>
+                   <p className="text-brand-red/90 text-sm whitespace-pre-wrap font-sans leading-relaxed text-justify">{q.requirements}</p>
                 </div>
                 
-                <div className="flex justify-end gap-4">
-                   <button onClick={() => handleDelete('queries', q.id)} className="w-full sm:w-auto px-6 py-3 border border-brand-red/30 text-brand-red font-brand text-xs uppercase tracking-widest rounded hover:bg-brand-red hover:text-black transition-all">Delete Entry</button>
+                <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-4">
+                   <div className="flex items-center gap-2 text-[10px] text-text-muted uppercase tracking-widest">
+                      <div className={`w-2 h-2 rounded-full ${q.status === 'completed' ? 'bg-green-500 shadow-[0_0_8px_#22c55e]' : 'bg-brand-red shadow-[0_0_8px_#B22C3E]'}`} />
+                      Status: {q.status || 'pending'}
+                   </div>
+                   <button onClick={() => handleDelete('queries', q.id)} className="w-full sm:w-auto px-8 py-3 bg-brand-red/5 border border-brand-red/30 text-brand-red font-brand text-[11px] uppercase tracking-widest rounded hover:bg-brand-red hover:text-black transition-all active:scale-95 flex items-center justify-center gap-2 group/del">
+                     <Trash2 size={14} className="group-hover/del:scale-110 transition-transform" />
+                     Trash Entry
+                   </button>
                 </div>
               </div>
             ))}
+            {queries.length === 0 && (
+              <div className="py-32 glass-card rounded-2xl flex flex-col items-center justify-center text-center opacity-40">
+                 <Briefcase size={64} className="mb-4 text-brand-red/50" />
+                 <p className="font-brand text-2xl text-brand-red uppercase tracking-[6px]">Inbox Zero</p>
+                 <p className="text-xs text-text-muted mt-2 tracking-widest">No order requests yet</p>
+              </div>
+            )}
           </div>
         )}
 
         {activeTab === 'messages' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 font-sans">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 font-sans">
             {messages.map(m => (
-              <div key={m.id} className="glass-card p-5 md:p-6 rounded-xl space-y-4">
-                <div className="flex justify-between items-start gap-4">
-                  <div className="overflow-hidden">
-                    <h4 className="text-brand-red font-brand text-lg md:text-xl uppercase tracking-widest truncate">{m.name}</h4>
-                    <p className="text-[10px] text-text-muted truncate">{m.email}</p>
-                  </div>
-                  <button onClick={() => handleDelete('messages', m.id)} className="text-brand-red hover:scale-110 p-2 shrink-0"><Trash2 size={18} /></button>
+              <div key={m.id} className="glass-card p-6 md:p-8 rounded-xl space-y-6 flex flex-col justify-between group relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                   <p className="text-[7px] text-text-muted uppercase tracking-[2px]">{formatDate(m.createdAt)}</p>
                 </div>
-                <div className="pt-4 border-t border-brand-red/10">
-                   <p className="text-[10px] text-text-muted uppercase tracking-widest mb-1">Subject: {m.subject || 'General Inquiry'}</p>
-                   <p className="text-brand-red/80 text-sm leading-relaxed">{m.message}</p>
+                
+                <div>
+                  <div className="flex justify-between items-start gap-4 mb-6">
+                    <div className="overflow-hidden">
+                      <h4 className="text-brand-red font-brand text-xl md:text-2xl uppercase tracking-widest truncate">{m.name}</h4>
+                      <p className="text-[10px] text-text-muted truncate lowercase border-t border-brand-red/10 pt-1 mt-1">{m.email}</p>
+                    </div>
+                    <button onClick={() => handleDelete('messages', m.id)} className="text-brand-red hover:scale-110 p-2 shrink-0 bg-brand-red/5 rounded-full hover:bg-brand-red/10 transition-all"><Trash2 size={18} /></button>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3">
+                       <div className="h-[1px] w-4 bg-brand-red/30" />
+                       <p className="text-[10px] text-text-muted uppercase tracking-[2px] font-bold">Subject: {m.subject || 'General Inquiry'}</p>
+                    </div>
+                    <p className="text-brand-red/80 text-sm leading-relaxed font-sans bg-black/20 p-4 rounded-lg border border-brand-red/5 tracking-wide">{m.message}</p>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-brand-red/10 flex justify-between items-center text-[9px] text-text-muted uppercase tracking-[3px]">
+                   <span>Contact Reference</span>
+                   <span className="text-brand-red/40">{m.id.slice(0, 10).toUpperCase()}</span>
                 </div>
               </div>
             ))}
+            {messages.length === 0 && (
+              <div className="col-span-full py-20 glass-card rounded-2xl flex flex-col items-center justify-center text-center opacity-40">
+                 <MessageSquare size={48} className="mb-4 text-brand-red/50" />
+                 <p className="font-brand text-xl text-brand-red uppercase tracking-widest">No messages received</p>
+              </div>
+            )}
           </div>
         )}
 
