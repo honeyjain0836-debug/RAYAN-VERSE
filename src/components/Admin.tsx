@@ -243,12 +243,15 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
   };
 
   // New Video Form
-  const [newVideo, setNewVideo] = useState({ title: '', url: '', category: 'YouTube', description: '', duration: '' });
+  const [newVideo, setNewVideo] = useState({ title: '', url: '', category: 'YouTube', description: '', duration: '', thumbnail: '' });
   const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [thumbFile, setThumbFile] = useState<File | null>(null);
   const [isVideoUploading, setIsVideoUploading] = useState(false);
   const [videoUploadProgress, setVideoUploadProgress] = useState(0);
+  const [thumbUploadProgress, setThumbUploadProgress] = useState(0);
   const [videoSuccess, setVideoSuccess] = useState(false);
   const videoInputRef = useRef<HTMLInputElement>(null);
+  const thumbInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const unsubscribers: (() => void)[] = [];
@@ -326,6 +329,7 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
     setIsAddingVideo(true);
     try {
       let finalUrl = newVideo.url;
+      let finalThumb = '';
 
       // Handle actual video file upload if present
       if (videoFile) {
@@ -335,8 +339,9 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
         }
         
         const fileExt = videoFile.name.split('.').pop() || 'mp4';
-        const storageRef = ref(storage, `portfolio/${Date.now()}-${newVideo.title.replace(/\s+/g, '-')}.${fileExt}`);
-        const uploadTask = uploadBytesResumable(storageRef, videoFile);
+        const storageRef = ref(storage, `portfolio/videos/${Date.now()}-${newVideo.title.replace(/\s+/g, '-')}.${fileExt}`);
+        const metadata = { contentType: videoFile.type || 'video/mp4' };
+        const uploadTask = uploadBytesResumable(storageRef, videoFile, metadata);
 
         finalUrl = await new Promise((resolve, reject) => {
           uploadTask.on('state_changed',
@@ -347,21 +352,47 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
         }) as string;
       }
 
+      // Handle thumbnail upload if present
+      if (thumbFile) {
+        const fileExt = thumbFile.name.split('.').pop() || 'jpg';
+        const thumbRef = ref(storage, `portfolio/thumbs/${Date.now()}-${newVideo.title.replace(/\s+/g, '-')}.${fileExt}`);
+        const metadata = { contentType: thumbFile.type || 'image/jpeg' };
+        const uploadTask = uploadBytesResumable(thumbRef, thumbFile, metadata);
+
+        finalThumb = await new Promise((resolve, reject) => {
+          uploadTask.on('state_changed',
+            (snap) => setThumbUploadProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100)),
+            (err) => reject(err),
+            async () => resolve(await getDownloadURL(uploadTask.snapshot.ref))
+          );
+        }) as string;
+      }
+
       await addDoc(collection(db, 'videos'), {
         ...newVideo,
         url: finalUrl,
+        thumbnail: finalThumb || newVideo.thumbnail,
         createdAt: serverTimestamp(),
         views: Math.floor(Math.random() * 1000)
       });
       
-      setNewVideo({ title: '', url: '', category: 'YouTube', description: '', duration: '' });
+      setNewVideo({ title: '', url: '', category: 'YouTube', description: '', duration: '', thumbnail: '' });
       setVideoFile(null);
+      setThumbFile(null);
       setVideoUploadProgress(0);
+      setThumbUploadProgress(0);
       setVideoSuccess(true);
+      setError(''); // Clear any previous errors on success
       setTimeout(() => setVideoSuccess(false), 4000);
     } catch (err: any) {
       console.error("Video add failed:", err);
-      setError(err.message || "Failed to add video.");
+      // Detailed error message
+      const errorMsg = err.code === 'storage/unauthorized' 
+        ? "Upload Permisson Denied. Please ensure you're identified." 
+        : err.code === 'storage/quota-exceeded'
+        ? "Storage quota exceeded. Please contact support."
+        : err.message || "Failed to add video. Please check your connection and try again.";
+      setError(errorMsg);
     } finally {
       setIsAddingVideo(false);
       setIsVideoUploading(false);
@@ -605,42 +636,84 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                 <option>Motion Graphics</option>
               </select>
               
-              <div className="col-span-full border-2 border-dashed border-brand-red/10 p-4 md:p-6 rounded-lg flex flex-col items-center justify-center bg-black/20 gap-3">
-                 <input 
-                   type="file" 
-                   ref={videoInputRef} 
-                   onChange={(e) => { setVideoFile(e.target.files?.[0] || null); if(e.target.files?.[0]) setNewVideo({...newVideo, url: ''}); }} 
-                   accept="video/*" 
-                   className="hidden" 
-                 />
-                 {videoFile ? (
-                   <div className="flex items-center gap-4 text-brand-red w-full justify-center">
-                     <CheckCircle2 size={24} className="shrink-0" />
-                     <div className="text-left overflow-hidden">
-                       <p className="text-sm font-bold truncate max-w-[150px] md:max-w-[200px]">{videoFile.name}</p>
-                       <p className="text-[10px] text-text-muted uppercase">{(videoFile.size / (1024 * 1024)).toFixed(2)} MB</p>
-                     </div>
-                     <button type="button" onClick={() => setVideoFile(null)} className="p-2 hover:bg-brand-red/10 rounded shrink-0"><X size={16} /></button>
-                   </div>
-                 ) : (
-                   <button 
-                     type="button" 
-                     onClick={() => videoInputRef.current?.click()}
-                     className="flex flex-col items-center gap-2 group w-full"
-                   >
-                     <Upload className="text-brand-red/40 group-hover:text-brand-red transition-colors" size={32} />
-                     <p className="text-[10px] text-text-muted group-hover:text-brand-red transition-colors uppercase tracking-widest font-brand text-center">Click to Upload Video File</p>
-                   </button>
-                 )}
+               <div className="col-span-full grid grid-cols-1 md:grid-cols-2 gap-4">
+                 {/* Video Upload Dropzone */}
+                 <div className="border-2 border-dashed border-brand-red/10 p-4 md:p-6 rounded-lg flex flex-col items-center justify-center bg-black/20 gap-3 min-h-[160px]">
+                    <input 
+                      type="file" 
+                      ref={videoInputRef} 
+                      onChange={(e) => { 
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setVideoFile(file);
+                          setNewVideo({...newVideo, url: ''});
+                        }
+                      }} 
+                      accept="video/*" 
+                      className="hidden" 
+                    />
+                    {videoFile ? (
+                      <div className="flex items-center gap-4 text-brand-red w-full justify-center">
+                        <Video size={24} className="shrink-0" />
+                        <div className="text-left overflow-hidden">
+                          <p className="text-sm font-bold truncate max-w-[120px]">{videoFile.name}</p>
+                          <p className="text-[10px] text-text-muted uppercase">{(videoFile.size / (1024 * 1024)).toFixed(2)} MB</p>
+                        </div>
+                        <button type="button" onClick={() => setVideoFile(null)} className="p-2 hover:bg-brand-red/10 rounded shrink-0"><X size={16} /></button>
+                      </div>
+                    ) : (
+                      <button 
+                        type="button" 
+                        onClick={() => videoInputRef.current?.click()}
+                        className="flex flex-col items-center gap-2 group w-full"
+                      >
+                        <Video className="text-brand-red/40 group-hover:text-brand-red transition-colors" size={32} />
+                        <p className="text-[10px] text-text-muted group-hover:text-brand-red transition-colors uppercase tracking-widest font-brand text-center">Video File (High Quality)</p>
+                      </button>
+                    )}
+                 </div>
+
+                 {/* Thumbnail Upload Dropzone */}
+                 <div className="border-2 border-dashed border-brand-red/10 p-4 md:p-6 rounded-lg flex flex-col items-center justify-center bg-black/20 gap-3 min-h-[160px]">
+                    <input 
+                      type="file" 
+                      ref={thumbInputRef} 
+                      onChange={(e) => setThumbFile(e.target.files?.[0] || null)} 
+                      accept="image/*" 
+                      className="hidden" 
+                    />
+                    {thumbFile ? (
+                      <div className="flex items-center gap-4 text-brand-red w-full justify-center">
+                         <div className="w-12 h-12 rounded bg-black overflow-hidden border border-brand-red/30 shrink-0">
+                           <img src={URL.createObjectURL(thumbFile)} className="w-full h-full object-cover" />
+                         </div>
+                         <div className="text-left overflow-hidden">
+                           <p className="text-sm font-bold truncate max-w-[120px]">{thumbFile.name}</p>
+                           <p className="text-[10px] text-text-muted uppercase">{(thumbFile.size / (1024 * 1024)).toFixed(2)} MB</p>
+                         </div>
+                         <button type="button" onClick={() => setThumbFile(null)} className="p-2 hover:bg-brand-red/10 rounded shrink-0"><X size={16} /></button>
+                      </div>
+                    ) : (
+                      <button 
+                        type="button" 
+                        onClick={() => thumbInputRef.current?.click()}
+                        className="flex flex-col items-center gap-2 group w-full"
+                      >
+                        <Upload className="text-brand-red/40 group-hover:text-brand-red transition-colors" size={30} />
+                        <p className="text-[10px] text-text-muted group-hover:text-brand-red transition-colors uppercase tracking-widest font-brand text-center">Cover Image (Optional)</p>
+                      </button>
+                    )}
+                 </div>
               </div>
 
               <input value={newVideo.duration} onChange={e => setNewVideo({...newVideo, duration: e.target.value})} placeholder="Duration (e.g. 2:34)" className="bg-bg-secondary border border-brand-red/20 p-3 rounded text-brand-red outline-none text-sm" />
+              <input value={newVideo.thumbnail} onChange={e => setNewVideo({...newVideo, thumbnail: e.target.value})} placeholder="Direct Image URL (Alternative to file)" className="bg-bg-secondary border border-brand-red/20 p-3 rounded text-brand-red outline-none text-sm" />
               <textarea value={newVideo.description} onChange={e => setNewVideo({...newVideo, description: e.target.value})} placeholder="Short Description" className="col-span-full bg-bg-secondary border border-brand-red/20 p-3 rounded text-brand-red outline-none text-sm" />
               
               <button 
                 type="submit" 
                 disabled={isAddingVideo || isVideoUploading}
-                className="col-span-full py-4 bg-brand-red text-black font-brand uppercase tracking-widest hover:bg-brand-red-dark disabled:opacity-50 flex items-center justify-center gap-2 text-sm md:text-base"
+                className="col-span-full py-4 bg-brand-red text-black font-brand uppercase tracking-widest hover:bg-brand-red-dark disabled:opacity-50 flex items-center justify-center gap-2 text-sm md:text-base transition-all"
               >
                 {isVideoUploading ? (
                   <>
@@ -649,11 +722,11 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                       transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
                       className="w-4 h-4 border-2 border-black border-t-transparent rounded-full"
                     />
-                    Uploading ({videoUploadProgress}%)
+                    Uploading Assets ({videoUploadProgress}%)
                   </>
                 ) : isAddingVideo ? (
-                  'Saving...'
-                ) : 'Upload to Portfolio'}
+                  'Saving Records...'
+                ) : 'Publish High Quality Project'}
               </button>
 
 
@@ -666,6 +739,16 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                     className="col-span-full bg-brand-red/10 border border-brand-red/20 p-4 rounded text-brand-red text-center font-brand text-sm tracking-widest flex items-center justify-center gap-2"
                   >
                     <CheckCircle2 size={18} /> Project Uploaded Successfully!
+                  </motion.div>
+                )}
+                {error && activeTab === 'videos' && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                    className="col-span-full bg-brand-red/5 border border-brand-red/20 p-4 rounded text-brand-red text-center font-brand text-xs tracking-wider flex items-center justify-center gap-2"
+                  >
+                    <AlertCircle size={14} /> {error}
                   </motion.div>
                 )}
               </AnimatePresence>
