@@ -243,7 +243,7 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
   };
 
   // New Video Form
-  const [newVideo, setNewVideo] = useState({ title: '', url: '', category: 'YouTube', description: '', duration: '', thumbnail: '' });
+  const [newVideo, setNewVideo] = useState({ title: '', category: 'Recent Projects', description: '', duration: '' });
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [thumbFile, setThumbFile] = useState<File | null>(null);
   const [isVideoUploading, setIsVideoUploading] = useState(false);
@@ -326,44 +326,48 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
     e.preventDefault();
     if (isAddingVideo || isVideoUploading) return;
     
+    if (!videoFile) {
+      setError("Please select a video file from your gallery.");
+      return;
+    }
+    
     setIsAddingVideo(true);
+    setIsVideoUploading(true);
+    setError('');
+
     try {
-      let finalUrl = newVideo.url;
+      let finalUrl = '';
       let finalThumb = '';
 
-      // Handle actual video file upload if present
-      if (videoFile) {
-        setIsVideoUploading(true);
-        if (!auth.currentUser) {
-          await signInAnonymously(auth);
-        }
-        
-        const fileExt = videoFile.name.split('.').pop() || 'mp4';
-        const storageRef = ref(storage, `portfolio/videos/${Date.now()}-${newVideo.title.replace(/\s+/g, '-')}.${fileExt}`);
-        const metadata = { contentType: videoFile.type || 'video/mp4' };
-        const uploadTask = uploadBytesResumable(storageRef, videoFile, metadata);
+      // High Quality direct video upload (Mandatory)
+      const videoExt = videoFile.name.split('.').pop() || 'mp4';
+      const storageRef = ref(storage, `portfolio/videos/${Date.now()}-${newVideo.title.replace(/\s+/g, '-')}.${videoExt}`);
+      const metadata = { contentType: videoFile.type || 'video/mp4' };
+      const uploadTask = uploadBytesResumable(storageRef, videoFile, metadata);
 
-        finalUrl = await new Promise((resolve, reject) => {
-          uploadTask.on('state_changed',
-            (snap) => setVideoUploadProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100)),
-            (err) => reject(err),
-            async () => resolve(await getDownloadURL(uploadTask.snapshot.ref))
-          );
-        }) as string;
-      }
+      finalUrl = await new Promise((resolve, reject) => {
+        uploadTask.on('state_changed',
+          (snap) => {
+            const progress = (snap.bytesTransferred / snap.totalBytes) * 100;
+            setVideoUploadProgress(Math.round(progress));
+          },
+          (err) => reject(err),
+          async () => resolve(await getDownloadURL(uploadTask.snapshot.ref))
+        );
+      }) as string;
 
       // Handle thumbnail upload if present
       if (thumbFile) {
-        const fileExt = thumbFile.name.split('.').pop() || 'jpg';
-        const thumbRef = ref(storage, `portfolio/thumbs/${Date.now()}-${newVideo.title.replace(/\s+/g, '-')}.${fileExt}`);
-        const metadata = { contentType: thumbFile.type || 'image/jpeg' };
-        const uploadTask = uploadBytesResumable(thumbRef, thumbFile, metadata);
+        const thumbExt = thumbFile.name.split('.').pop() || 'jpg';
+        const thumbRef = ref(storage, `portfolio/thumbs/${Date.now()}-${newVideo.title.replace(/\s+/g, '-')}.${thumbExt}`);
+        const thumbMetadata = { contentType: thumbFile.type || 'image/jpeg' };
+        const thumbUploadTask = uploadBytesResumable(thumbRef, thumbFile, thumbMetadata);
 
         finalThumb = await new Promise((resolve, reject) => {
-          uploadTask.on('state_changed',
+          thumbUploadTask.on('state_changed',
             (snap) => setThumbUploadProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100)),
             (err) => reject(err),
-            async () => resolve(await getDownloadURL(uploadTask.snapshot.ref))
+            async () => resolve(await getDownloadURL(thumbUploadTask.snapshot.ref))
           );
         }) as string;
       }
@@ -371,27 +375,26 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
       await addDoc(collection(db, 'videos'), {
         ...newVideo,
         url: finalUrl,
-        thumbnail: finalThumb || newVideo.thumbnail,
+        thumbnail: finalThumb,
         createdAt: serverTimestamp(),
-        views: Math.floor(Math.random() * 1000)
+        views: 0
       });
       
-      setNewVideo({ title: '', url: '', category: 'YouTube', description: '', duration: '', thumbnail: '' });
+      setNewVideo({ title: '', category: 'Recent Projects', description: '', duration: '' });
       setVideoFile(null);
       setThumbFile(null);
       setVideoUploadProgress(0);
       setThumbUploadProgress(0);
       setVideoSuccess(true);
-      setError(''); // Clear any previous errors on success
+      setError(''); 
       setTimeout(() => setVideoSuccess(false), 4000);
     } catch (err: any) {
       console.error("Video add failed:", err);
-      // Detailed error message
       const errorMsg = err.code === 'storage/unauthorized' 
-        ? "Upload Permisson Denied. Please ensure you're identified." 
+        ? "Access Denied. Check your connection or login again." 
         : err.code === 'storage/quota-exceeded'
-        ? "Storage quota exceeded. Please contact support."
-        : err.message || "Failed to add video. Please check your connection and try again.";
+        ? "Storage full! Contact admin."
+        : err.message || "Upload failed. Please try again.";
       setError(errorMsg);
     } finally {
       setIsAddingVideo(false);
@@ -617,22 +620,11 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
               </h3>
               <input value={newVideo.title} onChange={e => setNewVideo({...newVideo, title: e.target.value})} placeholder="Project Title" required className="bg-bg-secondary border border-brand-red/20 p-3 rounded text-brand-red outline-none text-sm" />
               
-              <div className="flex flex-col gap-2">
-                <input 
-                  value={newVideo.url} 
-                  onChange={e => { setNewVideo({...newVideo, url: e.target.value}); if(e.target.value) setVideoFile(null); }} 
-                  placeholder="URL (YouTube/Vimeo)" 
-                  disabled={!!videoFile}
-                  className="bg-bg-secondary border border-brand-red/20 p-3 rounded text-brand-red outline-none disabled:opacity-50 text-sm" 
-                />
-                <p className="text-[9px] text-text-muted uppercase tracking-wider">OR UPLOAD FILE BELOW</p>
-              </div>
-
-              <select value={newVideo.category} onChange={e => setNewVideo({...newVideo, category: e.target.value})} className="bg-bg-secondary border border-brand-red/20 p-3 rounded text-brand-red outline-none text-sm">
-                <option>YouTube</option>
-                <option>Reels</option>
-                <option>Commercials</option>
-                <option>Short Films</option>
+              <select value={newVideo.category} onChange={e => setNewVideo({...newVideo, category: e.target.value})} className="bg-bg-secondary border border-brand-red/20 p-3 rounded text-brand-red outline-none text-sm uppercase tracking-widest font-brand">
+                <option>Recent Projects</option>
+                <option>Commercial</option>
+                <option>Wedding</option>
+                <option>Event</option>
                 <option>Motion Graphics</option>
               </select>
               
@@ -646,7 +638,6 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                         const file = e.target.files?.[0];
                         if (file) {
                           setVideoFile(file);
-                          setNewVideo({...newVideo, url: ''});
                         }
                       }} 
                       accept="video/*" 
@@ -668,7 +659,7 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                         className="flex flex-col items-center gap-2 group w-full"
                       >
                         <Video className="text-brand-red/40 group-hover:text-brand-red transition-colors" size={32} />
-                        <p className="text-[10px] text-text-muted group-hover:text-brand-red transition-colors uppercase tracking-widest font-brand text-center">Video File (High Quality)</p>
+                        <p className="text-[10px] text-text-muted group-hover:text-brand-red transition-colors uppercase tracking-widest font-brand text-center">Video File (Gallery/Direct)</p>
                       </button>
                     )}
                  </div>
@@ -700,15 +691,14 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                         className="flex flex-col items-center gap-2 group w-full"
                       >
                         <Upload className="text-brand-red/40 group-hover:text-brand-red transition-colors" size={30} />
-                        <p className="text-[10px] text-text-muted group-hover:text-brand-red transition-colors uppercase tracking-widest font-brand text-center">Cover Image (Optional)</p>
+                        <p className="text-[10px] text-text-muted group-hover:text-brand-red transition-colors uppercase tracking-widest font-brand text-center">Cover Image (Gallery)</p>
                       </button>
                     )}
                  </div>
               </div>
 
-              <input value={newVideo.duration} onChange={e => setNewVideo({...newVideo, duration: e.target.value})} placeholder="Duration (e.g. 2:34)" className="bg-bg-secondary border border-brand-red/20 p-3 rounded text-brand-red outline-none text-sm" />
-              <input value={newVideo.thumbnail} onChange={e => setNewVideo({...newVideo, thumbnail: e.target.value})} placeholder="Direct Image URL (Alternative to file)" className="bg-bg-secondary border border-brand-red/20 p-3 rounded text-brand-red outline-none text-sm" />
-              <textarea value={newVideo.description} onChange={e => setNewVideo({...newVideo, description: e.target.value})} placeholder="Short Description" className="col-span-full bg-bg-secondary border border-brand-red/20 p-3 rounded text-brand-red outline-none text-sm" />
+              <input value={newVideo.duration} onChange={e => setNewVideo({...newVideo, duration: e.target.value})} placeholder="Duration (e.g. 0:45)" className="col-span-full bg-bg-secondary border border-brand-red/20 p-3 rounded text-brand-red outline-none text-sm" />
+              <textarea value={newVideo.description} onChange={e => setNewVideo({...newVideo, description: e.target.value})} placeholder="Project Context / Description" className="col-span-full bg-bg-secondary border border-brand-red/20 p-3 rounded text-brand-red outline-none text-sm" />
               
               <button 
                 type="submit" 
