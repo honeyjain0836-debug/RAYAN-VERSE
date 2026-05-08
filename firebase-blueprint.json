@@ -44,7 +44,7 @@
         "budget": { "type": "number" },
         "deadline": { "type": "string", "format": "date" },
         "source": { "type": "string" },
-        "status": { "type": "string", "enum": ["pending", "contacted", "completed"] },
+        "status": { "type": "string", "enum": ["pending", "processing", "completed", "cancelled"] },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["name", "email", "projectType", "requirements", "budget", "createdAt"]

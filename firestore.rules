@@ -1,8 +1,72 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function isValidString(val, max) {
+      return val is string && val.size() <= max;
+    }
+
+    function isValidId(id) {
+       return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Default deny
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if false;
+    }
+
+    // Videos Collection
+    match /videos/{videoId} {
+      allow read: if true;
+      allow write: if isSignedIn() 
+        && isValidId(videoId)
+        && incoming().title is string && incoming().title.size() <= 200
+        && incoming().url is string && incoming().url.size() <= 1000;
+      allow delete: if isSignedIn();
+    }
+
+    // Reviews Collection
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if true 
+        && incoming().name is string && incoming().name.size() <= 100
+        && incoming().rating is number && incoming().rating >= 1 && incoming().rating <= 5
+        && incoming().text is string && incoming().text.size() <= 1000;
+      allow delete: if isSignedIn();
+    }
+
+    // Queries Collection
+    match /queries/{queryId} {
+      allow read: if isSignedIn();
+      allow create: if true
+        && incoming().name is string && incoming().name.size() <= 100
+        && incoming().email is string && incoming().email.size() <= 150
+        && incoming().projectType is string;
+      allow update: if isSignedIn();
+      allow delete: if isSignedIn();
+    }
+
+    // Messages Collection
+    match /messages/{messageId} {
+      allow read: if isSignedIn();
+      allow create: if true
+        && incoming().name is string && incoming().name.size() <= 100
+        && incoming().email is string && incoming().email.size() <= 150;
+      allow delete: if isSignedIn();
+    }
+
+    // Settings Collection
+    match /settings/{docId} {
+      allow read: if true;
+      allow write: if isSignedIn();
     }
   }
 }
