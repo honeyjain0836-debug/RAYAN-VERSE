@@ -86,17 +86,17 @@ export function ReviewsAndQueries() {
   };
 
   return (
-    <section id="reviews" className="py-24 px-6 max-w-7xl mx-auto overflow-hidden">
-      <div className="grid lg:grid-cols-2 gap-20">
+    <section id="reviews" className="py-20 md:py-24 px-4 md:px-6 max-w-7xl mx-auto overflow-hidden">
+      <div className="grid lg:grid-cols-2 gap-12 lg:gap-20">
         
         {/* REVIEWS SECTION */}
-        <div className="space-y-12">
+        <div className="space-y-8 md:space-y-12">
           <div>
-            <h2 className="font-brand text-brand-red text-6xl uppercase tracking-[4px]">What They Say</h2>
-            <div className="w-24 h-1 bg-brand-red mt-4 shadow-[0_0_10px_#B22C3E]" />
+            <h2 className="font-brand text-brand-red text-4xl md:text-6xl uppercase tracking-[2px] md:tracking-[4px]">What They Say</h2>
+            <div className="w-16 md:w-24 h-1 bg-brand-red mt-4 shadow-[0_0_10px_#B22C3E]" />
           </div>
 
-          <div className="space-y-6 max-h-[600px] overflow-y-auto pr-4 custom-scrollbar">
+          <div className="space-y-6 max-h-[500px] md:max-h-[600px] overflow-y-auto pr-2 md:pr-4 custom-scrollbar">
             {reviews.length === 0 ? (
               <p className="text-text-muted font-sans text-xl italic">Be the first to share your experience</p>
             ) : (
@@ -139,11 +139,11 @@ export function ReviewsAndQueries() {
         </div>
 
         {/* QUERIES SECTION */}
-        <div className="space-y-12">
+        <div className="space-y-8 md:space-y-12">
           <div>
-            <h2 className="font-brand text-brand-red text-6xl uppercase tracking-[4px]">Place an Order</h2>
-            <p className="text-text-muted mt-2 font-sans text-xl">Tell me about your project</p>
-            <div className="w-24 h-1 bg-brand-red mt-4 shadow-[0_0_10px_#B22C3E]" />
+            <h2 className="font-brand text-brand-red text-4xl md:text-6xl uppercase tracking-[2px] md:tracking-[4px]">Place an Order</h2>
+            <p className="text-text-muted mt-2 font-sans text-base md:text-xl">Tell me about your project</p>
+            <div className="w-16 md:w-24 h-1 bg-brand-red mt-4 shadow-[0_0_10px_#B22C3E]" />
           </div>
 
           <AnimatePresence mode="wait">

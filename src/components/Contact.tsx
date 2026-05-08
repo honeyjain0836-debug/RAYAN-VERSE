@@ -36,19 +36,19 @@ export function Contact() {
   ];
 
   return (
-    <section id="contact" className="py-24 px-6 max-w-7xl mx-auto">
-      <div className="mb-16">
-        <h2 className="font-brand text-brand-red text-6xl uppercase tracking-[4px]">Contact</h2>
-        <div className="w-24 h-1 bg-brand-red mt-4 shadow-[0_0_10px_#B22C3E]" />
+    <section id="contact" className="py-20 md:py-24 px-4 md:px-6 max-w-7xl mx-auto">
+      <div className="mb-12 md:mb-16">
+        <h2 className="font-brand text-brand-red text-4xl md:text-6xl uppercase tracking-[2px] md:tracking-[4px]">Contact</h2>
+        <div className="w-16 md:w-24 h-1 bg-brand-red mt-4 shadow-[0_0_10px_#B22C3E]" />
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-20">
+      <div className="grid lg:grid-cols-2 gap-12 md:gap-20">
         {/* Left Column - Details */}
         <motion.div
            initial={{ opacity: 0, x: -30 }}
            whileInView={{ opacity: 1, x: 0 }}
            viewport={{ once: true }}
-           className="glass-card p-10 rounded-2xl space-y-10"
+           className="glass-card p-6 md:p-10 rounded-2xl space-y-8 md:space-y-10"
         >
           <div className="space-y-8">
             <div className="flex items-start gap-6">

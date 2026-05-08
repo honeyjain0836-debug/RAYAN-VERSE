@@ -89,9 +89,9 @@ export function Hero() {
            initial={{ opacity: 0, scale: 0.9 }}
            animate={{ opacity: 1, scale: 1 }}
            transition={{ duration: 1, ease: "easeOut" }}
-           className="mb-4"
+           className="mb-4 w-full flex justify-center"
         >
-          <BrandLogo className="text-[clamp(52px,10vw,120px)] leading-none animate-[pulse-glow_4s_ease-in-out_infinite]" />
+          <BrandLogo className="text-[clamp(32px,12vw,120px)] leading-none animate-[pulse-glow_4s_ease-in-out_infinite]" />
         </motion.div>
 
         <motion.div

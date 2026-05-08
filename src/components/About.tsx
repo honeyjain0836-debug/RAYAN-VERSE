@@ -63,19 +63,19 @@ export function About() {
   }, []);
 
   return (
-    <section id="about" className="py-24 px-6 max-w-7xl mx-auto">
-      <div className="mb-16">
-        <h2 className="font-brand text-brand-red text-6xl uppercase tracking-[4px]">About</h2>
-        <div className="w-24 h-1 bg-brand-red mt-4 shadow-[0_0_10px_#B22C3E]" />
+    <section id="about" className="py-20 md:py-24 px-4 md:px-6 max-w-7xl mx-auto">
+      <div className="mb-12 md:mb-16">
+        <h2 className="font-brand text-brand-red text-4xl md:text-6xl uppercase tracking-[2px] md:tracking-[4px]">About</h2>
+        <div className="w-16 md:w-24 h-1 bg-brand-red mt-4 shadow-[0_0_10px_#B22C3E]" />
       </div>
 
-      <div className="grid md:grid-cols-[40%_60%] gap-16 items-start">
+      <div className="grid md:grid-cols-[40%_60%] gap-10 md:gap-16 items-start">
         {/* Left Column - Profile Photo */}
         <motion.div 
-          initial={{ opacity: 0, x: -50 }}
-          whileInView={{ opacity: 1, x: 0 }}
+          initial={{ opacity: 0, scale: 0.95 }}
+          whileInView={{ opacity: 1, scale: 1 }}
           viewport={{ once: true }}
-          className="flex flex-col items-center sticky top-24"
+          className="flex flex-col items-center md:sticky md:top-24 z-10"
         >
           <div 
             className="w-full max-w-[380px] aspect-[4/5] md:aspect-[3/4] glass-card rounded-[16px] flex items-center justify-center border-2 border-brand-red/40 group overflow-hidden relative transition-all duration-400 ease-out shadow-[0_0_30px_rgba(178,44,62,0.15),0_0_80px_rgba(178,44,62,0.06)] hover:shadow-[0_0_40px_rgba(178,44,62,0.35),0_0_100px_rgba(178,44,62,0.12)] hover:scale-[1.02] bg-black/40"
@@ -115,7 +115,7 @@ export function About() {
 
                 <motion.img 
                   key="main-profile-photo"
-                  src="https://i.ibb.co/JRkdDLW2/IMG-0387.jpg" 
+                  src="IMG_0387.JPG (1).jpeg" 
                   alt="Rayanjainn - Professional Video Editor"
                   initial={{ opacity: 0, scale: 1.1 }}
                   animate={{ 
@@ -174,7 +174,7 @@ export function About() {
            viewport={{ once: true }}
            className="flex flex-col gap-8"
         >
-          <div className="space-y-6 text-brand-red/90 leading-relaxed text-lg font-sans">
+          <div className="space-y-6 text-brand-red/90 leading-relaxed text-base md:text-lg font-sans text-justify md:text-left">
             <p>
               Hey, I'm Rayanjainn — a passionate video editor who lives and breathes visual storytelling. 
               I don't just cut clips together. I build cinematic experiences that make people stop 
@@ -184,48 +184,48 @@ export function About() {
               With a sharp eye for pacing, colour grading, motion graphics and sound design, I specialise 
               in transforming raw footage into polished, high-impact edits that align perfectly with 
               my clients' vision. From YouTube content creators and social media brands to short films 
-              and commercial campaigns — I've delivered frame-perfect results across every format.
+              and commercial campaigns.
             </p>
             <p>
               I work closely with each client to understand not just what they want, but what their audience 
               needs to feel. Every project I take on gets my full creative focus, meticulous attention to 
-              detail, and a relentless drive to make it better than expected.
+              detail.
             </p>
-            <p className="italic">
+            <p className="italic text-center md:text-left">
               If you have a vision — I have the skills to make it unforgettable.
             </p>
           </div>
 
           {/* Stats Row */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 py-8 border-y border-brand-red/20 mt-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8 py-8 border-y border-brand-red/20 mt-4 md:mt-8">
             <div className="text-center md:text-left">
-              <div className="text-4xl font-brand text-brand-red">
+              <div className="text-3xl md:text-4xl font-brand text-brand-red">
                 <Counter value={120} />+
               </div>
-              <div className="text-sm text-text-muted uppercase tracking-wider mt-1">Projects Completed</div>
+              <div className="text-[10px] md:text-sm text-text-muted uppercase tracking-wider mt-1">Projects Completed</div>
             </div>
             
             <div className="hidden md:block w-[1px] h-full bg-brand-red/20" />
 
             <div className="text-center md:text-left">
-              <div className="text-4xl font-brand text-brand-red">
+              <div className="text-3xl md:text-4xl font-brand text-brand-red">
                 <Counter value={85} />+
               </div>
-              <div className="text-sm text-text-muted uppercase tracking-wider mt-1">Happy Clients</div>
+              <div className="text-[10px] md:text-sm text-text-muted uppercase tracking-wider mt-1">Happy Clients</div>
             </div>
 
             <div className="hidden md:block w-[1px] h-full bg-brand-red/20" />
 
             <div className="text-center md:text-left">
-              <div className="text-4xl font-brand text-brand-red">2+</div>
-              <div className="text-sm text-text-muted uppercase tracking-wider mt-1">Years Experience</div>
+              <div className="text-3xl md:text-4xl font-brand text-brand-red">2+</div>
+              <div className="text-[10px] md:text-sm text-text-muted uppercase tracking-wider mt-1">Years Experience</div>
             </div>
 
             <div className="hidden md:block w-[1px] h-full bg-brand-red/20" />
 
             <div className="text-center md:text-left">
-              <div className="text-4xl font-brand text-brand-red">10+</div>
-              <div className="text-sm text-text-muted uppercase tracking-wider mt-1">Editing Styles</div>
+              <div className="text-3xl md:text-4xl font-brand text-brand-red">10+</div>
+              <div className="text-[10px] md:text-sm text-text-muted uppercase tracking-wider mt-1">Editing Styles</div>
             </div>
           </div>
         </motion.div>

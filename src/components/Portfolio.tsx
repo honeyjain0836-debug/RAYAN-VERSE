@@ -64,11 +64,11 @@ export function Portfolio() {
   };
 
   return (
-    <section id="portfolio" className="py-24 px-6 max-w-7xl mx-auto">
-      <div className="mb-16">
-        <h2 className="font-brand text-brand-red text-6xl uppercase tracking-[4px]">Portfolio</h2>
-        <p className="text-text-muted mt-2 font-sans text-xl">Visual Stories I've Crafted</p>
-        <div className="w-24 h-1 bg-brand-red mt-4 shadow-[0_0_10px_#B22C3E]" />
+    <section id="portfolio" className="py-20 md:py-24 px-4 md:px-6 max-w-7xl mx-auto">
+      <div className="mb-12 md:mb-16">
+        <h2 className="font-brand text-brand-red text-4xl md:text-6xl uppercase tracking-[2px] md:tracking-[4px]">Portfolio</h2>
+        <p className="text-text-muted mt-2 font-sans text-base md:text-xl">Visual Stories I've Crafted</p>
+        <div className="w-16 md:w-24 h-1 bg-brand-red mt-4 shadow-[0_0_10px_#B22C3E]" />
       </div>
 
       {/* Filter Tabs */}
