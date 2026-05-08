@@ -422,62 +422,64 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
 
       {/* Sidebar */}
       <aside className={`
-        fixed inset-y-0 left-0 z-40 w-64 bg-bg-matte border-r border-brand-red/10 flex flex-col p-6 space-y-12 shrink-0
-        transition-transform duration-300 md:translate-x-0 md:relative
+        fixed inset-y-0 left-0 z-[100] w-64 bg-bg-matte border-r border-brand-red/10 flex flex-col p-6 shrink-0
+        transition-transform duration-300 md:translate-x-0 md:relative overflow-y-auto scrollbar-hide
         ${isMobileMenuOpen ? 'translate-x-0 shadow-[0_0_40px_rgba(0,0,0,0.8)]' : '-translate-x-full'}
       `}>
-        <div className="hidden md:block">
-          <BrandLogo className="text-2xl" />
-          <a 
-            href="/" 
-            className="mt-4 flex items-center gap-2 text-[10px] text-text-muted hover:text-brand-red font-brand uppercase tracking-[2px] transition-all group"
-          >
-            <div className="w-1 h-1 bg-brand-red rounded-full group-hover:scale-150 transition-transform" />
-            Back to Site
-          </a>
-        </div>
-        
-        <nav className="flex flex-col gap-2">
-          {TABS.map(tab => (
-            <button
-               key={tab.id}
-               onClick={() => {
-                 setActiveTab(tab.id);
-                 setIsMobileMenuOpen(false);
-               }}
-               className={`flex items-center gap-4 p-4 rounded-lg font-brand uppercase tracking-widest text-sm transition-all ${
-                 activeTab === tab.id ? 'bg-brand-red text-black' : 'text-brand-red hover:bg-brand-red/5'
-               }`}
-            >
-              <tab.icon size={20} />
-              {tab.label}
-            </button>
-          ))}
-          
-          <div className="md:hidden pt-4 border-t border-brand-red/10 mt-4">
-             <a 
+        <div className="flex flex-col h-full">
+          <div className="mb-12">
+            <BrandLogo className="text-2xl" />
+            <a 
               href="/" 
-              className="flex items-center gap-4 p-4 text-brand-red hover:bg-brand-red/5 rounded-lg font-brand uppercase tracking-widest text-sm transition-all"
+              className="mt-4 flex items-center gap-2 text-[10px] text-text-muted hover:text-brand-red font-brand uppercase tracking-[2px] transition-all group"
             >
-              <X size={20} />
-              Return to Site
+              <div className="w-1 h-1 bg-brand-red rounded-full group-hover:scale-150 transition-transform" />
+              Back to Site
             </a>
           </div>
-        </nav>
+          
+          <nav className="flex flex-col gap-2">
+            {TABS.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`flex items-center gap-4 p-4 rounded-lg font-brand uppercase tracking-widest text-sm transition-all ${
+                  activeTab === tab.id ? 'bg-brand-red text-black' : 'text-brand-red hover:bg-brand-red/5'
+                }`}
+              >
+                <tab.icon size={20} />
+                {tab.label}
+              </button>
+            ))}
+            
+            <div className="md:hidden pt-4 border-t border-brand-red/10 mt-4">
+              <a 
+                href="/" 
+                className="flex items-center gap-4 p-4 text-brand-red hover:bg-brand-red/5 rounded-lg font-brand uppercase tracking-widest text-sm transition-all"
+              >
+                <X size={20} />
+                Return to Site
+              </a>
+            </div>
+          </nav>
 
-        <button 
-          onClick={() => { auth.signOut(); onLogout(); }}
-          className="mt-auto flex items-center gap-4 text-text-muted hover:text-brand-red p-4 transition-all uppercase tracking-widest text-xs font-brand"
-        >
-          <LogOut size={16} />
-          Sign Out
-        </button>
+          <button 
+            onClick={() => { auth.signOut(); onLogout(); }}
+            className="mt-auto pt-12 flex items-center gap-4 text-text-muted hover:text-brand-red p-4 transition-all uppercase tracking-widest text-xs font-brand"
+          >
+            <LogOut size={16} />
+            Sign Out
+          </button>
+        </div>
       </aside>
 
       {/* Backdrop for mobile */}
       {isMobileMenuOpen && (
         <div 
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-30 md:hidden"
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[90] md:hidden"
           onClick={() => setIsMobileMenuOpen(false)}
         />
       )}
