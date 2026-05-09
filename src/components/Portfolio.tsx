@@ -1,141 +1,100 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Play, X, ExternalLink, Clock, Eye } from 'lucide-react';
-import { collection, query, orderBy, onSnapshot, limit } from 'firebase/firestore';
+import { Play, X, Clock, Eye, ChevronDown } from 'lucide-react';
+import { collection, query, orderBy, onSnapshot, limit, where } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
-const CATEGORIES = ['All', 'YouTube', 'Reels', 'Commercials', 'Short Films', 'Motion Graphics'];
+const CATEGORIES = ['All', 'YouTube Video Edit', 'Instagram Reels', 'Commercials', 'Short Films', 'Motion Graphics', 'Wedding / Event Edit', 'Podcast Edit'];
 
-interface Video {
+interface VideoProject {
   id: string;
   title: string;
   description: string;
-  url: string;
   category: string;
-  duration?: string;
-  thumbnail?: string;
-  views?: number;
+  tags?: string[];
+  coverURL: string;
+  videoURL: string;
+  videoSize?: number;
+  videoDuration?: number;
+  uploadedAt: any;
+  isVisible: boolean;
+  views: number;
 }
 
-interface VideoCardProps {
-  key?: string;
-  video: Video;
-  index: number;
-  onSelect: (v: Video) => void;
-}
-
-function VideoCard({ video, index, onSelect }: VideoCardProps) {
-  const [isHovered, setIsHovered] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  const isDirectVideo = (url: string) => {
-    const extensions = ['.mp4', '.webm', '.ogg', '.mov', '.m4v'];
-    return extensions.some(ext => url.toLowerCase().includes(ext)) || url.includes('firebasestorage');
-  };
-
-  const getThumbnail = (video: Video) => {
-    if (video.thumbnail) return video.thumbnail;
-    if (video.url.includes('youtube.com') || video.url.includes('youtu.be')) {
-      const id = video.url.split('v=')[1]?.split('&')[0] || video.url.split('/').pop();
-      return `https://img.youtube.com/vi/${id}/maxresdefault.jpg`;
-    }
-    return '/placeholder-video.jpg';
-  };
+function ProjectCard({ project, index, onSelect }: { project: VideoProject; index: number; onSelect: (p: VideoProject) => void }) {
+  const [isIntersecting, setIsIntersecting] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (isHovered && videoRef.current) {
-      videoRef.current.play().catch(() => {});
-    } else if (videoRef.current) {
-      videoRef.current.pause();
-      videoRef.current.currentTime = 0;
-    }
-  }, [isHovered]);
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        setIsIntersecting(true);
+        observer.disconnect();
+      }
+    }, { threshold: 0.1 });
+
+    if (cardRef.current) observer.observe(cardRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <motion.div
+      ref={cardRef}
       initial={{ opacity: 0, y: 30 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
-      transition={{ delay: index * 0.1 }}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      className="glass-card rounded-xl overflow-hidden group hover:-translate-y-2 transition-all duration-300 flex flex-col"
+      transition={{ duration: 0.6, delay: (index % 3) * 0.1 }}
+      onClick={() => onSelect(project)}
+      className="relative group cursor-pointer aspect-video rounded-xl overflow-hidden border border-brand-red/20 shadow-[0_8px_32px_rgba(0,0,0,0.5)] hover:border-brand-red/70 h-[240px] md:h-[280px] transition-all duration-400"
     >
-      {/* Thumbnail Area */}
-      <div 
-        className="relative aspect-video overflow-hidden cursor-pointer bg-black/40"
-        onClick={() => onSelect(video)}
-      >
-        <AnimatePresence mode="wait">
-          {isHovered && isDirectVideo(video.url) ? (
-            <motion.div
-              key="video-preview"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 z-10"
-            >
-              <video
-                ref={videoRef}
-                src={video.url}
-                muted
-                loop
-                playsInline
-                className="w-full h-full object-cover"
-              />
-            </motion.div>
-          ) : (
-            <motion.img 
-              key="thumbnail"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              src={getThumbnail(video)}
-              alt={video.title}
-              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-              loading="lazy"
-            />
-          )}
-        </AnimatePresence>
-
-        <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-all flex items-center justify-center z-20">
-          <div className="w-16 h-16 bg-brand-red/90 rounded-full flex items-center justify-center transform scale-90 group-hover:scale-100 transition-transform shadow-[0_0_20px_rgba(178,44,62,0.5)]">
-            <Play className="text-black ml-1" fill="currentColor" size={28} />
-          </div>
-        </div>
-        <div className="absolute top-4 left-4 z-20">
-          <span className="px-3 py-1 bg-[#141414]/80 backdrop-blur-md border border-brand-red/30 text-brand-red text-[10px] uppercase tracking-widest rounded-full">
-            {video.category}
-          </span>
-        </div>
-        {video.duration && (
-            <div className="absolute bottom-4 right-4 flex items-center gap-1.5 px-3 py-1 bg-black/80 backdrop-blur-md text-brand-red text-[10px] rounded-full z-20">
-              <Clock size={12} />
-              {video.duration}
-            </div>
-        )}
+      {/* Background Image Layer */}
+      {isIntersecting && (
+        <img 
+          src={project.coverURL} 
+          alt={project.title}
+          loading="lazy"
+          className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+        />
+      )}
+      
+      {/* Gradient Overlay */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent opacity-80 group-hover:opacity-90 transition-opacity" />
+      
+      {/* Red Shimmer Effect */}
+      <div className="absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity duration-700">
+        <div className="absolute inset-0 translate-x-[-100%] animate-shimmer bg-gradient-to-r from-transparent via-brand-red to-transparent" />
       </div>
 
-      {/* Info Area */}
-      <div className="p-6 flex flex-col flex-grow">
-        <h3 className="font-brand text-xl text-brand-red tracking-wide uppercase line-clamp-1">{video.title}</h3>
-        <p className="text-text-muted text-sm mt-3 line-clamp-2 min-h-[40px]">{video.description}</p>
-        
-        <div className="mt-auto pt-6 flex items-center justify-between border-t border-brand-red/10">
-          <div className="flex items-center gap-4 text-xs text-text-muted">
-            {video.views !== undefined && (
-              <span className="flex items-center gap-1.5">
-                <Eye size={14} />
-                {video.views}
-              </span>
-            )}
+      {/* Category Pill */}
+      <div className="absolute top-4 left-4 z-10">
+        <span className="bg-brand-red text-black font-brand text-[10px] md:text-[11px] uppercase tracking-[2px] px-3 py-1 rounded-full shadow-[0_0_15px_#B22C3E]">
+          {project.category}
+        </span>
+      </div>
+
+      {/* Content Overlay */}
+      <div className="absolute inset-0 p-6 flex flex-col justify-end z-10">
+        <div className="transform translate-y-2 group-hover:translate-y-0 transition-transform duration-400">
+          <h3 className="font-brand text-white text-lg md:text-2xl uppercase tracking-widest leading-tight line-clamp-1 mb-1">
+            {project.title}
+          </h3>
+          <p className="text-white/70 font-sans text-xs md:text-sm line-clamp-2 mb-4 max-w-[90%] font-light">
+            {project.description}
+          </p>
+          
+          <div className="flex items-center justify-between">
+            <div className="flex flex-wrap gap-2">
+              {project.tags?.slice(0, 2).map((tag, i) => (
+                <span key={i} className="text-[9px] text-white/40 uppercase tracking-widest border border-white/10 px-2 py-0.5 rounded-sm">
+                  #{tag}
+                </span>
+              ))}
+            </div>
+            
+            <div className="w-9 h-9 md:w-11 md:h-11 rounded-full bg-brand-red flex items-center justify-center shadow-[0_0_20px_#B22C3E] group-hover:scale-110 transition-all group-hover:animate-pulse">
+               <Play size={18} fill="black" className="text-black ml-1" />
+            </div>
           </div>
-          <button 
-            onClick={() => onSelect(video)}
-            className="font-brand text-brand-red text-sm tracking-wider uppercase flex items-center gap-2 hover:shadow-[0_0_10px_rgba(178,44,62,0.3)] transition-all"
-          >
-            Watch Now <ExternalLink size={14} />
-          </button>
         </div>
       </div>
     </motion.div>
@@ -143,59 +102,64 @@ function VideoCard({ video, index, onSelect }: VideoCardProps) {
 }
 
 export function Portfolio() {
-  const [videos, setVideos] = useState<Video[]>([]);
+  const [projects, setProjects] = useState<VideoProject[]>([]);
   const [filter, setFilter] = useState('All');
-  const [selectedVideo, setSelectedVideo] = useState<Video | null>(null);
+  const [selectedProject, setSelectedProject] = useState<VideoProject | null>(null);
   const [loading, setLoading] = useState(true);
+  const [visibleCount, setVisibleCount] = useState(9);
 
   useEffect(() => {
-    const q = query(collection(db, 'videos'), orderBy('createdAt', 'desc'), limit(100));
+    const q = query(
+      collection(db, 'videos'), 
+      where('isVisible', '==', true),
+      orderBy('uploadedAt', 'desc')
+    );
+    
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const vids = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Video));
-      setVideos(vids);
+      const projs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as VideoProject));
+      setProjects(projs);
       setLoading(false);
     });
+    
     return () => unsubscribe();
   }, []);
 
-  const filteredVideos = filter === 'All' 
-    ? videos 
-    : videos.filter(v => v.category === filter);
+  const filteredProjects = filter === 'All' 
+    ? projects 
+    : projects.filter(p => p.category === filter);
 
-  const isDirectVideo = (url: string) => {
-    const extensions = ['.mp4', '.webm', '.ogg', '.mov', '.m4v'];
-    return extensions.some(ext => url.toLowerCase().includes(ext)) || url.includes('firebasestorage');
-  };
-
-  const getEmbedUrl = (url: string) => {
-    if (url.includes('youtube.com') || url.includes('youtu.be')) {
-      const id = url.split('v=')[1]?.split('&')[0] || url.split('/').pop();
-      return `https://www.youtube.com/embed/${id}?autoplay=1`;
-    }
-    if (url.includes('vimeo.com')) {
-      const id = url.split('/').pop();
-      return `https://player.vimeo.com/video/${id}?autoplay=1`;
-    }
-    return url;
-  };
+  const displayedProjects = filteredProjects.slice(0, visibleCount);
 
   return (
-    <section id="portfolio" className="py-20 md:py-24 px-4 md:px-6 max-w-7xl mx-auto">
-      <div className="mb-12 md:mb-16">
-        <h2 className="font-brand text-brand-red text-4xl md:text-6xl uppercase tracking-[2px] md:tracking-[4px]">Portfolio</h2>
-        <p className="text-text-muted mt-2 font-sans text-base md:text-xl">Visual Stories I've Crafted</p>
-        <div className="w-16 md:w-24 h-1 bg-brand-red mt-4 shadow-[0_0_10px_#B22C3E]" />
+    <section id="portfolio" className="py-24 px-4 md:px-6 relative bg-noise">
+      <div className="max-w-7xl mx-auto mb-16">
+        <motion.div
+          initial={{ opacity: 0, x: -20 }}
+          whileInView={{ opacity: 1, x: 0 }}
+          viewport={{ once: true }}
+          className="space-y-4"
+        >
+          <h2 className="font-brand text-brand-red text-4xl md:text-7xl uppercase tracking-[4px] md:tracking-[8px]">
+            Masterpieces
+          </h2>
+          <div className="flex items-center gap-6">
+            <div className="h-0.5 w-24 bg-brand-red shadow-[0_0_15px_#B22C3E]" />
+            <p className="text-text-muted font-brand uppercase tracking-[2px] md:tracking-[4px] text-sm md:text-lg">
+              Visual Narrative Exhibition
+            </p>
+          </div>
+        </motion.div>
       </div>
 
       {/* Filter Tabs */}
-      <div className="flex flex-wrap gap-4 mb-12">
+      <div className="max-w-7xl mx-auto mb-12 flex flex-wrap gap-4 overflow-x-auto pb-4 scrollbar-hide">
         {CATEGORIES.map((cat) => (
           <button
             key={cat}
-            onClick={() => setFilter(cat)}
-            className={`px-6 py-2 pb-1.5 rounded-sm font-brand uppercase tracking-widest text-sm transition-all duration-300 border ${
+            onClick={() => { setFilter(cat); setVisibleCount(9); }}
+            className={`px-6 py-2.5 rounded-sm font-brand uppercase tracking-widest text-xs transition-all duration-300 border flex-shrink-0 ${
               filter === cat 
-                ? 'bg-brand-red text-black border-brand-red' 
+                ? 'bg-brand-red text-black border-brand-red shadow-[0_0_20px_rgba(178,44,62,0.4)]' 
                 : 'bg-transparent text-brand-red border-brand-red/30 hover:border-brand-red'
             }`}
           >
@@ -204,67 +168,120 @@ export function Portfolio() {
         ))}
       </div>
 
-      {/* Video Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {filteredVideos.map((video, index) => (
-          <VideoCard 
-            key={video.id} 
-            video={video} 
-            index={index} 
-            onSelect={setSelectedVideo} 
-          />
-        ))}
+      {/* Project Grid */}
+      <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 min-h-[400px]">
+        <AnimatePresence mode="popLayout">
+          {displayedProjects.map((project, index) => (
+            <ProjectCard 
+              key={project.id} 
+              project={project} 
+              index={index} 
+              onSelect={(p) => setSelectedProject(p)} 
+            />
+          ))}
+        </AnimatePresence>
       </div>
 
-      {filteredVideos.length === 0 && !loading && (
-        <div className="py-20 text-center font-brand text-2xl text-text-muted uppercase tracking-[4px]">
-          No projects found in this category
+      {loading && (
+        <div className="flex flex-col items-center justify-center py-24 gap-4">
+           <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }} className="w-10 h-10 border-4 border-brand-red border-t-transparent rounded-full shadow-[0_0_15px_#B22C3E]" />
+           <p className="font-brand text-brand-red uppercase tracking-widest text-xs">Curating masterpieces...</p>
         </div>
       )}
 
-      {/* Video Modal */}
+      {!loading && filteredProjects.length === 0 && (
+        <div className="py-32 text-center">
+          <p className="font-brand text-text-muted text-xl md:text-3xl uppercase tracking-[4px] opacity-40">
+            No projects in this category
+          </p>
+        </div>
+      )}
+
+      {/* Load More Button */}
+      {filteredProjects.length > visibleCount && (
+        <div className="flex justify-center mt-20">
+          <button
+            onClick={() => setVisibleCount(prev => prev + 9)}
+            className="group flex flex-col items-center gap-4 transition-all"
+          >
+            <span className="font-brand text-brand-red uppercase tracking-[3px] text-xs">Explore More</span>
+            <div className="w-12 h-12 rounded-full border border-brand-red/30 flex items-center justify-center group-hover:bg-brand-red/5 group-hover:border-brand-red transition-all">
+              <ChevronDown className="text-brand-red group-hover:translate-y-1 transition-transform" />
+            </div>
+          </button>
+        </div>
+      )}
+
+      {/* Video Player Modal */}
       <AnimatePresence>
-        {selectedVideo && (
+        {selectedProject && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[200] bg-black/96 backdrop-blur-lg flex items-center justify-center p-4 md:p-10"
-            onClick={() => setSelectedVideo(null)}
+            className="fixed inset-0 z-[1000] bg-black/98 flex items-center justify-center p-4 md:p-8 overflow-y-auto pt-24"
+            onClick={() => setSelectedProject(null)}
           >
-            <button 
-              className="absolute top-6 right-6 text-brand-red p-2 hover:scale-110 transition-transform"
-              onClick={() => setSelectedVideo(null)}
-            >
-              <X size={32} />
-            </button>
+            {/* Modal Header Controls */}
+            <div className="fixed top-0 inset-x-0 p-6 md:p-12 flex justify-between items-center z-10 bg-gradient-to-b from-black to-transparent pointer-events-none">
+               <h3 className="font-brand text-brand-red text-xl md:text-3xl uppercase tracking-widest leading-none pointer-events-auto max-w-[70%] truncate">
+                  {selectedProject.title}
+               </h3>
+               <button 
+                onClick={() => setSelectedProject(null)}
+                className="w-12 h-12 rounded-full bg-brand-red/10 border border-brand-red/30 flex items-center justify-center text-brand-red hover:bg-brand-red hover:text-black transition-all pointer-events-auto"
+               >
+                  <X size={24} />
+               </button>
+            </div>
 
             <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="w-full max-w-[1000px] flex flex-col gap-6"
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className="w-full max-w-[1100px] flex flex-col gap-8 py-12"
               onClick={e => e.stopPropagation()}
             >
-              <h3 className="font-brand text-3xl text-brand-red tracking-widest uppercase">{selectedVideo.title}</h3>
-              <div className="relative aspect-video w-full glass-card rounded-xl overflow-hidden shadow-[0_0_50px_rgba(178,44,62,0.2)] bg-black">
-                {isDirectVideo(selectedVideo.url) ? (
-                  <video 
-                    src={selectedVideo.url} 
-                    controls 
-                    autoPlay 
-                    playsInline
-                    preload="auto"
-                    className="w-full h-full"
-                  />
-                ) : (
-                  <iframe
-                    src={getEmbedUrl(selectedVideo.url)}
-                    className="absolute inset-0 w-full h-full border-0"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                  />
-                )}
+              {/* Native HTML5 Video Player */}
+              <div className="relative aspect-video w-full rounded-2xl overflow-hidden shadow-[0_0_80px_rgba(178,44,62,0.15)] border border-brand-red/10 bg-black">
+                <video 
+                  key={selectedProject.videoURL}
+                  src={selectedProject.videoURL} 
+                  controls 
+                  autoPlay 
+                  playsInline
+                  preload="metadata"
+                  className="w-full h-full"
+                />
+              </div>
+
+              {/* Project Info Below Video */}
+              <div className="space-y-6">
+                 <div className="flex flex-wrap items-center gap-4">
+                    <span className="bg-brand-red text-black font-brand text-[11px] uppercase tracking-[2px] px-4 py-1.5 rounded-full">
+                       {selectedProject.category}
+                    </span>
+                    <div className="flex items-center gap-2 text-text-muted text-[11px] uppercase tracking-widest">
+                       <Clock size={14} className="text-brand-red" />
+                       {Math.floor(selectedProject.videoDuration || 0)}s Duration
+                    </div>
+                    <div className="flex items-center gap-2 text-text-muted text-[11px] uppercase tracking-widest">
+                       <Eye size={14} className="text-brand-red" />
+                       {selectedProject.views} Total Views
+                    </div>
+                 </div>
+
+                 <p className="text-white/80 font-sans text-sm md:text-lg leading-relaxed max-w-3xl font-light">
+                    {selectedProject.description}
+                 </p>
+
+                 <div className="flex flex-wrap gap-3">
+                    {selectedProject.tags?.map((tag, i) => (
+                      <span key={i} className="px-3 py-1 bg-white/5 border border-white/10 text-white/40 uppercase tracking-widest text-[10px] rounded-sm hover:border-brand-red/30 hover:text-brand-red transition-all cursor-default">
+                         #{tag}
+                      </span>
+                    ))}
+                 </div>
               </div>
             </motion.div>
           </motion.div>

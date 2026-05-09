@@ -12,6 +12,12 @@ export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 console.log('Firebase Initialized with Project:', firebaseConfig.projectId);
 console.log('Firestore Database ID:', firebaseConfig.firestoreDatabaseId || 'default');
 export const storage = getStorage(app);
+
+// Increase reachability limits for large video files
+// 10 minutes for operations, 20 minutes for overall upload retry
+storage.maxOperationRetryTime = 600000;
+storage.maxUploadRetryTime = 1200000;
+
 export const auth = getAuth(app);
 
 /* Auto sign in anonymously when app loads */

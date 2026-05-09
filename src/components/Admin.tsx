@@ -1,13 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import type { FormEvent, ChangeEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Lock, LogOut, Video, MessageSquare, Briefcase, Plus, Trash2, Eye, ExternalLink, Star, X, Settings as SettingsIcon, Upload, CheckCircle2, AlertCircle, Menu, LayoutDashboard, Clock, User, Filter } from 'lucide-react';
+import { Lock, LogOut, Video, MessageSquare, Briefcase, Plus, Trash2, Eye, ExternalLink, Star, X, Settings as SettingsIcon, Upload, CheckCircle2, AlertCircle, Menu, LayoutDashboard, Clock, User, Filter, Image as ImageIcon, Sparkles, ChevronRight, Check } from 'lucide-react';
 import { collection, addDoc, deleteDoc, doc, onSnapshot, query, orderBy, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
+import { signInAnonymously } from 'firebase/auth';
 import { db, auth, storage } from '../lib/firebase';
 import { BrandLogo } from './ui/BrandElements';
-import { uploadProfilePhoto, getProfilePhotoURL } from '../services/uploadPhoto';
+import { uploadProfilePhoto } from '../services/uploadPhoto';
+import imageCompression from 'browser-image-compression';
+import heic2any from 'heic2any';
 
 const ADMIN_EMAIL = 'rayanjain234@gmail.com';
 const ADMIN_PHONE = '9390522470';
@@ -24,6 +26,15 @@ export function AdminPanel() {
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
+    // Load remembered credentials if threshold reached
+    const loginCount = parseInt(localStorage.getItem('quik_admin_login_count') || '0');
+    if (loginCount >= 2) {
+      const savedEmail = localStorage.getItem('quik_admin_email');
+      const savedPhone = localStorage.getItem('quik_admin_phone');
+      if (savedEmail) setEmail(savedEmail);
+      if (savedPhone) setPhone(savedPhone);
+    }
+
     // Pre-authenticate anonymously to hide latency
     // This runs in background as soon as Admin page starts loading
     const initAuth = async () => {
@@ -55,6 +66,17 @@ export function AdminPanel() {
     if (pin === SECURITY_PIN) {
       setIsAuth(true);
       window.scrollTo(0, 0);
+      
+      // Update login persistence
+      const currentCount = parseInt(localStorage.getItem('quik_admin_login_count') || '0');
+      const newCount = currentCount + 1;
+      localStorage.setItem('quik_admin_login_count', newCount.toString());
+      
+      // Store credentials for auto-suggest (Step 1 only)
+      localStorage.setItem('quik_admin_email', email);
+      localStorage.setItem('quik_admin_phone', phone);
+      
+      setError('');
     } else {
       setError('Invalid PIN.');
     }
@@ -94,6 +116,7 @@ export function AdminPanel() {
                     type="email"
                     placeholder="Email Address"
                     required
+                    autoComplete="email"
                     value={email}
                     onChange={e => setEmail(e.target.value)}
                     className="w-full bg-bg-secondary border border-brand-red/20 p-3 md:p-4 rounded-sm text-brand-red focus:border-brand-red outline-none text-sm md:text-base"
@@ -102,6 +125,7 @@ export function AdminPanel() {
                     type="tel"
                     placeholder="Phone Number"
                     required
+                    autoComplete="tel"
                     value={phone}
                     onChange={e => setPhone(e.target.value)}
                     className="w-full bg-bg-secondary border border-brand-red/20 p-3 md:p-4 rounded-sm text-brand-red focus:border-brand-red outline-none text-sm md:text-base"
@@ -138,6 +162,7 @@ export function AdminPanel() {
                     maxLength={6}
                     required
                     autoFocus
+                    autoComplete="off"
                     placeholder="......"
                     value={pin}
                     onChange={e => setPin(e.target.value)}
@@ -242,163 +267,230 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
     }
   };
 
-  // New Video Form
-  const [newVideo, setNewVideo] = useState({ title: '', category: 'Recent Projects', description: '', duration: '' });
+  // New Project Upload State
+  const [newVideo, setNewVideo] = useState({ 
+    title: '', 
+    category: 'YouTube Video Edit', 
+    description: '', 
+    tags: '' 
+  });
   const [videoFile, setVideoFile] = useState<File | null>(null);
-  const [thumbFile, setThumbFile] = useState<File | null>(null);
-  const [isVideoUploading, setIsVideoUploading] = useState(false);
-  const [videoUploadProgress, setVideoUploadProgress] = useState(0);
-  const [thumbUploadProgress, setThumbUploadProgress] = useState(0);
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [coverPreview, setCoverPreview] = useState<string | null>(null);
+  const [videoMetadata, setVideoMetadata] = useState({ size: 0, duration: 0, name: '' });
+  
+  // Progress states
+  const [uploadStage, setUploadStage] = useState<'idle' | 'validating' | 'processing' | 'uploading_cover' | 'uploading_video' | 'saving' | 'success'>('idle');
+  const [coverProgress, setCoverProgress] = useState(0);
+  const [videoProgress, setVideoProgress] = useState(0);
+  const [videoStats, setVideoStats] = useState({ uploaded: 0, total: 0, speed: 0, remaining: 0 });
   const [videoSuccess, setVideoSuccess] = useState(false);
+  const [formError, setFormError] = useState<{ [key: string]: string }>({});
+
   const videoInputRef = useRef<HTMLInputElement>(null);
-  const thumbInputRef = useRef<HTMLInputElement>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    const unsubscribers: (() => void)[] = [];
-
-    // Always fetch all data to support Dashboard stats and instant tab switching
-    const unsubVideos = onSnapshot(query(collection(db, 'videos'), orderBy('createdAt', 'desc')), s => 
-      setVideos(s.docs.map(d => ({id: d.id, ...d.data()}))));
-    unsubscribers.push(unsubVideos);
-
-    const unsubReviews = onSnapshot(query(collection(db, 'reviews'), orderBy('createdAt', 'desc')), s => 
-      setReviews(s.docs.map(d => ({id: d.id, ...d.data()}))));
-    unsubscribers.push(unsubReviews);
-
-    const unsubQueries = onSnapshot(query(collection(db, 'queries'), orderBy('createdAt', 'desc')), s => 
-      setQueries(s.docs.map(d => ({id: d.id, ...d.data()}))));
-    unsubscribers.push(unsubQueries);
-
-    const unsubMessages = onSnapshot(query(collection(db, 'messages'), orderBy('createdAt', 'desc')), s => 
-      setMessages(s.docs.map(d => ({id: d.id, ...d.data()}))));
-    unsubscribers.push(unsubMessages);
-
-    const unsubSettings = onSnapshot(doc(db, 'settings', 'profile'), doc => {
-       const data = doc.data();
-       setSettings(data);
-       setPhotoURL(data?.photoURL || null);
-    });
-    unsubscribers.push(unsubSettings);
-    
-    return () => unsubscribers.forEach(unsub => unsub());
-  }, []);
-
-  const handleFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setSelectedFile(file);
-    setPreviewURL(URL.createObjectURL(file));
-    setImageError(false);
-    setUploadStatus('idle');
-    setUploadError('');
+  const formatSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  const handlePhotoUpload = async () => {
-    if (!selectedFile) return;
+  const formatTime = (seconds: number) => {
+    if (!isFinite(seconds) || seconds < 0) return 'calculating...';
+    if (seconds < 60) return `~${Math.round(seconds)} seconds left`;
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.round(seconds % 60);
+    return `~${mins} min ${secs} sec left`;
+  };
 
-    setIsUploading(true);
-    setUploadStatus('idle');
-    setUploadProgress(0);
-    setUploadError('');
+  const handleVideoSelect = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setVideoFile(file);
+      setVideoMetadata({
+        size: file.size,
+        name: file.name,
+        duration: 0
+      });
+      
+      // Try to get duration
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.onloadedmetadata = () => {
+        setVideoMetadata(prev => ({ ...prev, duration: video.duration }));
+        URL.revokeObjectURL(video.src);
+      };
+      video.src = URL.createObjectURL(file);
+    }
+  };
+
+  const handleCoverSelect = async (e: ChangeEvent<HTMLInputElement>) => {
+    let file = e.target.files?.[0];
+    if (!file) return;
 
     try {
-      const url = await uploadProfilePhoto(selectedFile, (pct, msg) => {
-        setUploadProgress(pct);
-        setProcessingMsg(msg);
-      });
+      // Handle HEIC/HEIF
+      if (file.type === '' || file.name.toLowerCase().endsWith('.heic') || file.name.toLowerCase().endsWith('.heif')) {
+        setProcessingMsg("Converting HEIC from iPhone...");
+        const blob = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.8 });
+        file = new File([Array.isArray(blob) ? blob[0] : blob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", { type: 'image/jpeg' });
+      }
 
-      setUploadStatus('success');
-      setIsUploading(false);
-      setSelectedFile(null);
-      setPreviewURL(null);
-      // Wait a bit then clear success
-      setTimeout(() => setUploadStatus('idle'), 4000);
-    } catch (err: any) {
-      console.error("Upload failed:", err);
-      setUploadError(err.message || "Upload failed");
-      setUploadStatus('error');
-      setIsUploading(false);
+      setCoverFile(file);
+      setCoverPreview(URL.createObjectURL(file));
+      setFormError(prev => ({ ...prev, cover: '' }));
+    } catch (err) {
+      console.error("Cover selection error:", err);
+      setError("Failed to process cover image.");
     }
   };
 
-  const [isAddingVideo, setIsAddingVideo] = useState(false);
-  const handleAddVideo = async (e: FormEvent) => {
+  const handleUploadProject = async (e: FormEvent) => {
     e.preventDefault();
-    if (isAddingVideo || isVideoUploading) return;
-    
-    if (!videoFile) {
-      setError("Please select a video file from your gallery.");
+    if (uploadStage !== 'idle') return;
+
+    // Validation
+    const errors: { [key: string]: string } = {};
+    if (!newVideo.title) errors.title = "Project title is required";
+    if (!newVideo.description) errors.description = "Description is required";
+    if (!coverFile) errors.cover = "Cover image is mandatory";
+    if (!videoFile) errors.video = "Video file is mandatory";
+
+    if (Object.keys(errors).length > 0) {
+      setFormError(errors);
       return;
     }
-    
-    setIsAddingVideo(true);
-    setIsVideoUploading(true);
+
+    setUploadStage('validating');
     setError('');
 
     try {
-      let finalUrl = '';
-      let finalThumb = '';
+      // Processing Image
+      setUploadStage('processing');
+      const compressedCover = await imageCompression(coverFile!, {
+        maxSizeMB: 1.5,
+        maxWidthOrHeight: 1200,
+        useWebWorker: true,
+        initialQuality: 0.85
+      });
 
-      // High Quality direct video upload (Mandatory)
-      const videoExt = videoFile.name.split('.').pop() || 'mp4';
-      const storageRef = ref(storage, `portfolio/videos/${Date.now()}-${newVideo.title.replace(/\s+/g, '-')}.${videoExt}`);
-      const metadata = { contentType: videoFile.type || 'video/mp4' };
-      const uploadTask = uploadBytesResumable(storageRef, videoFile, metadata);
-
-      finalUrl = await new Promise((resolve, reject) => {
-        uploadTask.on('state_changed',
-          (snap) => {
-            const progress = (snap.bytesTransferred / snap.totalBytes) * 100;
-            setVideoUploadProgress(Math.round(progress));
-          },
+      // Upload Cover
+      setUploadStage('uploading_cover');
+      const coverRef = ref(storage, `covers/${Date.now()}-cover.jpg`);
+      const coverTask = uploadBytesResumable(coverRef, compressedCover);
+      
+      const coverURL = await new Promise((resolve, reject) => {
+        coverTask.on('state_changed',
+          (snap) => setCoverProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100)),
           (err) => reject(err),
-          async () => resolve(await getDownloadURL(uploadTask.snapshot.ref))
+          async () => resolve(await getDownloadURL(coverTask.snapshot.ref))
         );
       }) as string;
 
-      // Handle thumbnail upload if present
-      if (thumbFile) {
-        const thumbExt = thumbFile.name.split('.').pop() || 'jpg';
-        const thumbRef = ref(storage, `portfolio/thumbs/${Date.now()}-${newVideo.title.replace(/\s+/g, '-')}.${thumbExt}`);
-        const thumbMetadata = { contentType: thumbFile.type || 'image/jpeg' };
-        const thumbUploadTask = uploadBytesResumable(thumbRef, thumbFile, thumbMetadata);
+      // Upload Video
+      setUploadStage('uploading_video');
+      const videoExt = videoFile!.name.split('.').pop() || 'mp4';
+      const videoPath = `videos/${Date.now()}-video.${videoExt}`;
+      const videoRef = ref(storage, videoPath);
+      const videoTask = uploadBytesResumable(videoRef, videoFile!);
+      
+      let startTime = Date.now();
+      let lastUploaded = 0;
 
-        finalThumb = await new Promise((resolve, reject) => {
-          thumbUploadTask.on('state_changed',
-            (snap) => setThumbUploadProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100)),
-            (err) => reject(err),
-            async () => resolve(await getDownloadURL(thumbUploadTask.snapshot.ref))
-          );
-        }) as string;
-      }
+      const videoURL = await new Promise((resolve, reject) => {
+        videoTask.on('state_changed',
+          (snap) => {
+            const progress = (snap.bytesTransferred / snap.totalBytes) * 100;
+            setVideoProgress(Math.round(progress));
+            
+            // Calculate speed and remaining time
+            const now = Date.now();
+            const elapsed = (now - startTime) / 1000; // seconds
+            if (elapsed > 1) {
+              const uploaded = snap.bytesTransferred;
+              const speed = (uploaded - lastUploaded) / (now - startTime) * 1000; // bytes per second
+              const remaining = (snap.totalBytes - uploaded) / speed;
+              
+              setVideoStats({
+                uploaded: uploaded,
+                total: snap.totalBytes,
+                speed: speed,
+                remaining: remaining
+              });
+            }
+          },
+          (err) => reject(err),
+          async () => resolve(await getDownloadURL(videoTask.snapshot.ref))
+        );
+      }) as string;
 
+      // Saving to Firestore
+      setUploadStage('saving');
       await addDoc(collection(db, 'videos'), {
-        ...newVideo,
-        url: finalUrl,
-        thumbnail: finalThumb,
-        createdAt: serverTimestamp(),
+        title: newVideo.title,
+        category: newVideo.category,
+        description: newVideo.description,
+        tags: newVideo.tags.split(',').map(t => t.trim()).filter(t => t),
+        coverURL,
+        videoURL,
+        coverPath: coverRef.fullPath,
+        videoPath,
+        videoSize: videoFile!.size,
+        videoDuration: videoMetadata.duration,
+        uploadedAt: serverTimestamp(),
+        isVisible: true,
         views: 0
       });
-      
-      setNewVideo({ title: '', category: 'Recent Projects', description: '', duration: '' });
-      setVideoFile(null);
-      setThumbFile(null);
-      setVideoUploadProgress(0);
-      setThumbUploadProgress(0);
+
+      setUploadStage('success');
       setVideoSuccess(true);
-      setError(''); 
-      setTimeout(() => setVideoSuccess(false), 4000);
     } catch (err: any) {
-      console.error("Video add failed:", err);
-      const errorMsg = err.code === 'storage/unauthorized' 
-        ? "Access Denied. Check your connection or login again." 
-        : err.code === 'storage/quota-exceeded'
-        ? "Storage full! Contact admin."
-        : err.message || "Upload failed. Please try again.";
-      setError(errorMsg);
-    } finally {
-      setIsAddingVideo(false);
-      setIsVideoUploading(false);
+      console.error("Project upload failed:", err);
+      
+      let msg = "Failed to upload project. Please retry.";
+      if (err.code === 'storage/retry-limit-exceeded') {
+        msg = "The upload was interrupted too many times due to a poor connection. We've increased the timeout limit; please try again.";
+      } else if (err.code === 'storage/unauthorized') {
+        msg = "Authentication failed. Please refresh the page and try again.";
+      } else if (err.message?.includes('quota')) {
+        msg = "Storage quota exceeded for today. Please try again tomorrow.";
+      } else {
+        msg = err.message || msg;
+      }
+      
+      setError(msg);
+      setUploadStage('idle');
+    }
+  };
+
+  const resetForm = () => {
+    setNewVideo({ title: '', category: 'YouTube Video Edit', description: '', tags: '' });
+    setVideoFile(null);
+    setCoverFile(null);
+    setCoverPreview(null);
+    setUploadStage('idle');
+    setVideoSuccess(false);
+    setFormError({});
+  };
+
+  const toggleVisibility = async (id: string, current: boolean) => {
+    await updateDoc(doc(db, 'videos', id), { isVisible: !current });
+  };
+
+  const deleteProject = async (project: any) => {
+    if (confirm(`Are you sure you want to delete ${project.title}? This cannot be undone.`)) {
+      try {
+        if (project.videoPath) await deleteObject(ref(storage, project.videoPath));
+        if (project.coverPath) await deleteObject(ref(storage, project.coverPath));
+        await deleteDoc(doc(db, 'videos', project.id));
+      } catch (err) {
+        console.error("Delete failed:", err);
+        // Still delete doc if storage files are missing
+        await deleteDoc(doc(db, 'videos', project.id));
+      }
     }
   };
 
@@ -456,12 +548,12 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
 
       {/* Sidebar */}
       <aside className={`
-        fixed inset-y-0 left-0 z-[100] w-64 bg-bg-matte border-r border-brand-red/10 flex flex-col p-6 shrink-0
-        transition-transform duration-300 md:translate-x-0 md:relative overflow-y-auto scrollbar-hide
+        fixed inset-y-0 left-0 z-[100] w-64 bg-bg-matte border-r border-brand-red/10 flex flex-col
+        transition-transform duration-300 md:translate-x-0 md:sticky md:top-0 h-screen
         ${isMobileMenuOpen ? 'translate-x-0 shadow-[0_0_40px_rgba(0,0,0,0.8)]' : '-translate-x-full'}
       `}>
-        <div className="flex flex-col h-full">
-          <div className="mb-12">
+        <div className="flex flex-col h-full p-6">
+          <div className="mb-10 shrink-0">
             <BrandLogo className="text-2xl" />
             <a 
               href="/" 
@@ -472,7 +564,7 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
             </a>
           </div>
           
-          <nav className="flex flex-col gap-2">
+          <nav className="flex flex-col gap-2 overflow-y-auto scrollbar-hide flex-1 pr-2">
             {TABS.map(tab => (
               <button
                 key={tab.id}
@@ -480,8 +572,10 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                   setActiveTab(tab.id);
                   setIsMobileMenuOpen(false);
                 }}
-                className={`flex items-center gap-4 p-4 rounded-lg font-brand uppercase tracking-widest text-sm transition-all ${
-                  activeTab === tab.id ? 'bg-brand-red text-black' : 'text-brand-red hover:bg-brand-red/5'
+                className={`flex items-center gap-4 p-4 rounded-lg font-brand uppercase tracking-widest text-sm transition-all shrink-0 ${
+                  activeTab === tab.id 
+                    ? 'bg-brand-red text-black shadow-[0_0_15px_rgba(178,44,62,0.3)]' 
+                    : 'text-brand-red hover:bg-brand-red/5'
                 }`}
               >
                 <tab.icon size={20} />
@@ -500,13 +594,15 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
             </div>
           </nav>
 
-          <button 
-            onClick={() => { auth.signOut(); onLogout(); }}
-            className="mt-auto pt-12 flex items-center gap-4 text-text-muted hover:text-brand-red p-4 transition-all uppercase tracking-widest text-xs font-brand"
-          >
-            <LogOut size={16} />
-            Sign Out
-          </button>
+          <div className="mt-auto pt-6 border-t border-brand-red/10 shrink-0">
+            <button 
+              onClick={() => { auth.signOut(); onLogout(); }}
+              className="w-full flex items-center gap-4 text-text-muted hover:text-brand-red p-2 transition-all uppercase tracking-widest text-xs font-brand"
+            >
+              <LogOut size={16} />
+              Sign Out
+            </button>
+          </div>
         </div>
       </aside>
 
@@ -613,156 +709,300 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
         )}
 
         {activeTab === 'videos' && (
-          <div className="space-y-8 md:space-y-12">
-            <form onSubmit={handleAddVideo} className="glass-card p-6 md:p-8 rounded-xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 relative overflow-hidden">
-              <h3 className="col-span-full font-brand text-lg md:text-xl text-brand-red uppercase tracking-widest flex items-center gap-3">
-                <Plus size={20} /> Add New Project
-              </h3>
-              <input value={newVideo.title} onChange={e => setNewVideo({...newVideo, title: e.target.value})} placeholder="Project Title" required className="bg-bg-secondary border border-brand-red/20 p-3 rounded text-brand-red outline-none text-sm" />
-              
-              <select value={newVideo.category} onChange={e => setNewVideo({...newVideo, category: e.target.value})} className="bg-bg-secondary border border-brand-red/20 p-3 rounded text-brand-red outline-none text-sm uppercase tracking-widest font-brand">
-                <option>Recent Projects</option>
-                <option>Commercial</option>
-                <option>Wedding</option>
-                <option>Event</option>
-                <option>Motion Graphics</option>
-              </select>
-              
-               <div className="col-span-full grid grid-cols-1 md:grid-cols-2 gap-4">
-                 {/* Video Upload Dropzone */}
-                 <div className="border-2 border-dashed border-brand-red/10 p-4 md:p-6 rounded-lg flex flex-col items-center justify-center bg-black/20 gap-3 min-h-[160px]">
-                    <input 
-                      type="file" 
-                      ref={videoInputRef} 
-                      onChange={(e) => { 
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          setVideoFile(file);
-                        }
-                      }} 
-                      accept="video/*" 
-                      className="hidden" 
-                    />
-                    {videoFile ? (
-                      <div className="flex items-center gap-4 text-brand-red w-full justify-center">
-                        <Video size={24} className="shrink-0" />
-                        <div className="text-left overflow-hidden">
-                          <p className="text-sm font-bold truncate max-w-[120px]">{videoFile.name}</p>
-                          <p className="text-[10px] text-text-muted uppercase">{(videoFile.size / (1024 * 1024)).toFixed(2)} MB</p>
-                        </div>
-                        <button type="button" onClick={() => setVideoFile(null)} className="p-2 hover:bg-brand-red/10 rounded shrink-0"><X size={16} /></button>
-                      </div>
-                    ) : (
-                      <button 
-                        type="button" 
-                        onClick={() => videoInputRef.current?.click()}
-                        className="flex flex-col items-center gap-2 group w-full"
-                      >
-                        <Video className="text-brand-red/40 group-hover:text-brand-red transition-colors" size={32} />
-                        <p className="text-[10px] text-text-muted group-hover:text-brand-red transition-colors uppercase tracking-widest font-brand text-center">Video File (Gallery/Direct)</p>
-                      </button>
-                    )}
-                 </div>
-
-                 {/* Thumbnail Upload Dropzone */}
-                 <div className="border-2 border-dashed border-brand-red/10 p-4 md:p-6 rounded-lg flex flex-col items-center justify-center bg-black/20 gap-3 min-h-[160px]">
-                    <input 
-                      type="file" 
-                      ref={thumbInputRef} 
-                      onChange={(e) => setThumbFile(e.target.files?.[0] || null)} 
-                      accept="image/*" 
-                      className="hidden" 
-                    />
-                    {thumbFile ? (
-                      <div className="flex items-center gap-4 text-brand-red w-full justify-center">
-                         <div className="w-12 h-12 rounded bg-black overflow-hidden border border-brand-red/30 shrink-0">
-                           <img src={URL.createObjectURL(thumbFile)} className="w-full h-full object-cover" />
-                         </div>
-                         <div className="text-left overflow-hidden">
-                           <p className="text-sm font-bold truncate max-w-[120px]">{thumbFile.name}</p>
-                           <p className="text-[10px] text-text-muted uppercase">{(thumbFile.size / (1024 * 1024)).toFixed(2)} MB</p>
-                         </div>
-                         <button type="button" onClick={() => setThumbFile(null)} className="p-2 hover:bg-brand-red/10 rounded shrink-0"><X size={16} /></button>
-                      </div>
-                    ) : (
-                      <button 
-                        type="button" 
-                        onClick={() => thumbInputRef.current?.click()}
-                        className="flex flex-col items-center gap-2 group w-full"
-                      >
-                        <Upload className="text-brand-red/40 group-hover:text-brand-red transition-colors" size={30} />
-                        <p className="text-[10px] text-text-muted group-hover:text-brand-red transition-colors uppercase tracking-widest font-brand text-center">Cover Image (Gallery)</p>
-                      </button>
-                    )}
-                 </div>
-              </div>
-
-              <input value={newVideo.duration} onChange={e => setNewVideo({...newVideo, duration: e.target.value})} placeholder="Duration (e.g. 0:45)" className="col-span-full bg-bg-secondary border border-brand-red/20 p-3 rounded text-brand-red outline-none text-sm" />
-              <textarea value={newVideo.description} onChange={e => setNewVideo({...newVideo, description: e.target.value})} placeholder="Project Context / Description" className="col-span-full bg-bg-secondary border border-brand-red/20 p-3 rounded text-brand-red outline-none text-sm" />
-              
-              <button 
-                type="submit" 
-                disabled={isAddingVideo || isVideoUploading}
-                className="col-span-full py-4 bg-brand-red text-black font-brand uppercase tracking-widest hover:bg-brand-red-dark disabled:opacity-50 flex items-center justify-center gap-2 text-sm md:text-base transition-all"
-              >
-                {isVideoUploading ? (
-                  <>
-                    <motion.div 
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                      className="w-4 h-4 border-2 border-black border-t-transparent rounded-full"
-                    />
-                    Uploading Assets ({videoUploadProgress}%)
-                  </>
-                ) : isAddingVideo ? (
-                  'Saving Records...'
-                ) : 'Publish High Quality Project'}
-              </button>
-
-
-              <AnimatePresence>
-                {videoSuccess && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0 }}
-                    className="col-span-full bg-brand-red/10 border border-brand-red/20 p-4 rounded text-brand-red text-center font-brand text-sm tracking-widest flex items-center justify-center gap-2"
-                  >
-                    <CheckCircle2 size={18} /> Project Uploaded Successfully!
-                  </motion.div>
-                )}
-                {error && activeTab === 'videos' && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0 }}
-                    className="col-span-full bg-brand-red/5 border border-brand-red/20 p-4 rounded text-brand-red text-center font-brand text-xs tracking-wider flex items-center justify-center gap-2"
-                  >
-                    <AlertCircle size={14} /> {error}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </form>
-
-            <div className="grid gap-3 md:gap-4 font-sans">
-              {videos.map(v => (
-                <div key={v.id} className="glass-card p-3 md:p-4 rounded-lg flex flex-col sm:flex-row items-center justify-between group gap-4 md:gap-0">
-                  <div className="flex items-center gap-4 md:gap-6 w-full">
-                    <div className="w-24 md:w-20 aspect-video bg-black rounded border border-brand-red/20 overflow-hidden shrink-0">
-                      <img src={`https://img.youtube.com/vi/${v.url.split('v=')[1]?.split('&')[0] || v.url.split('/').pop()}/mqdefault.jpg`} className="w-full h-full object-cover" />
-                    </div>
-                    <div className="overflow-hidden">
-                      <h4 className="text-brand-red font-brand uppercase tracking-wider text-sm md:text-base truncate">{v.title}</h4>
-                      <p className="text-[9px] md:text-[10px] text-text-muted uppercase tracking-widest">{v.category} • {v.duration || 'N/A'}</p>
-                    </div>
+          <div className="space-y-12">
+            <AnimatePresence mode="wait">
+              {uploadStage === 'success' ? (
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="glass-card p-12 rounded-2xl flex flex-col items-center justify-center text-center space-y-6"
+                >
+                  <div className="w-24 h-24 bg-brand-red/10 rounded-full flex items-center justify-center">
+                    <CheckCircle2 size={48} className="text-brand-red" />
                   </div>
-                  <div className="flex gap-2 md:gap-4 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-all w-full sm:w-auto justify-end border-t sm:border-0 border-brand-red/10 pt-2 sm:pt-0">
-                    <a href={v.url} target="_blank" className="p-2 text-brand-red hover:bg-brand-red/10 rounded"><ExternalLink size={18} /></a>
-                    <button onClick={() => handleDelete('videos', v.id)} className="p-2 text-brand-red hover:bg-brand-red/10 rounded"><Trash2 size={18} /></button>
+                  <div className="space-y-2">
+                    <h3 className="font-brand text-3xl text-brand-red uppercase tracking-widest">Project Published!</h3>
+                    <p className="text-text-muted">Your masterpiece is now live in the portfolio.</p>
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                    <button 
+                      onClick={resetForm}
+                      className="px-8 py-3 bg-brand-red text-black font-brand uppercase tracking-widest text-sm hover:shadow-[0_0_20px_rgba(178,44,62,0.4)] transition-all"
+                    >
+                      Upload Another
+                    </button>
+                    <a 
+                      href="/#portfolio" 
+                      className="px-8 py-3 border border-brand-red/30 text-brand-red font-brand uppercase tracking-widest text-sm hover:bg-brand-red/5 transition-all"
+                    >
+                      View Portfolio
+                    </a>
+                  </div>
+                </motion.div>
+              ) : (
+                <div className="space-y-8">
+                  <form onSubmit={handleUploadProject} className="space-y-8">
+                    <div className="glass-card p-6 md:p-8 rounded-xl space-y-6">
+                      <div className="flex items-center gap-3 border-b border-brand-red/10 pb-4">
+                        <Video size={20} className="text-brand-red" />
+                        <h3 className="font-brand text-lg text-brand-red uppercase tracking-widest">New Project Details</h3>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <label className="text-[10px] text-text-muted uppercase tracking-widest font-brand">Project Title *</label>
+                          <input 
+                            value={newVideo.title} 
+                            onChange={e => setNewVideo({...newVideo, title: e.target.value})} 
+                            placeholder="Enter project title" 
+                            className={`w-full bg-bg-secondary border ${formError.title ? 'border-brand-red' : 'border-brand-red/20'} p-3 rounded text-brand-red outline-none text-sm font-brand uppercase tracking-wider`} 
+                          />
+                          {formError.title && <p className="text-brand-red text-[10px] uppercase font-brand italic">{formError.title}</p>}
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-[10px] text-text-muted uppercase tracking-widest font-brand">Category *</label>
+                          <select 
+                            value={newVideo.category} 
+                            onChange={e => setNewVideo({...newVideo, category: e.target.value})} 
+                            className="w-full bg-bg-secondary border border-brand-red/20 p-3 rounded text-brand-red outline-none text-sm font-brand uppercase tracking-widest"
+                          >
+                            <option>YouTube Video Edit</option>
+                            <option>Instagram Reels</option>
+                            <option>Commercials</option>
+                            <option>Short Films</option>
+                            <option>Motion Graphics</option>
+                            <option>Wedding / Event Edit</option>
+                            <option>Podcast Edit</option>
+                            <option>Other</option>
+                          </select>
+                        </div>
+
+                        <div className="space-y-2 col-span-full">
+                          <div className="flex justify-between items-center">
+                            <label className="text-[10px] text-text-muted uppercase tracking-widest font-brand">Description *</label>
+                            <span className={`text-[10px] font-brand ${newVideo.description.length > 180 ? 'text-brand-red font-bold' : 'text-text-muted'}`}>
+                              {newVideo.description.length}/200
+                            </span>
+                          </div>
+                          <textarea 
+                            value={newVideo.description} 
+                            onChange={e => setNewVideo({...newVideo, description: e.target.value.slice(0, 200)})} 
+                            placeholder="Brief description of this project" 
+                            className={`w-full h-24 bg-bg-secondary border ${formError.description ? 'border-brand-red' : 'border-brand-red/20'} p-3 rounded text-brand-red outline-none text-sm resize-none`}
+                          />
+                          {formError.description && <p className="text-brand-red text-[10px] uppercase font-brand italic">{formError.description}</p>}
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-[10px] text-text-muted uppercase tracking-widest font-brand">Tags (Optional)</label>
+                          <input 
+                            value={newVideo.tags} 
+                            onChange={e => setNewVideo({...newVideo, tags: e.target.value})} 
+                            placeholder="cinematic, color grading, reels" 
+                            className="w-full bg-bg-secondary border border-brand-red/20 p-3 rounded text-brand-red outline-none text-sm" 
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Cover Image Upload */}
+                      <div className="glass-card p-6 rounded-xl space-y-4">
+                        <div className="space-y-1">
+                          <h4 className="font-brand text-brand-red uppercase tracking-widest flex items-center gap-2">
+                            <ImageIcon size={16} /> Cover Image *
+                          </h4>
+                          <p className="text-[10px] text-text-muted uppercase italic">Thumbnail for project card</p>
+                        </div>
+                        
+                        <div 
+                          onClick={() => coverInputRef.current?.click()}
+                          className={`relative h-40 border-2 border-dashed ${formError.cover ? 'border-brand-red/50 bg-brand-red/5' : 'border-brand-red/10 bg-black/20'} rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-brand-red/30 transition-all overflow-hidden group`}
+                        >
+                          <input type="file" ref={coverInputRef} onChange={handleCoverSelect} accept="image/*" className="hidden" />
+                          
+                          {coverPreview ? (
+                            <>
+                              <img src={coverPreview} className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-40 transition-opacity" />
+                              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <Plus size={32} className="text-brand-red mb-2" />
+                                <span className="text-[10px] font-brand uppercase tracking-widest text-white">Change Image</span>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="flex flex-col items-center gap-3 text-center px-4">
+                              <ImageIcon size={32} className="text-brand-red/40" />
+                              <div className="space-y-1">
+                                <p className="text-[10px] text-text-muted font-brand uppercase tracking-[2px]">Tap to select cover image</p>
+                                <p className="text-[9px] text-text-muted/60 uppercase">JPG, PNG, WEBP, HEIC accepted</p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        {coverFile && <p className="text-[9px] text-text-muted uppercase truncate">File: {coverFile.name} ({formatSize(coverFile.size)})</p>}
+                        {formError.cover && <p className="text-brand-red text-[10px] uppercase font-brand italic">{formError.cover}</p>}
+                      </div>
+
+                      {/* Video Upload */}
+                      <div className="glass-card p-6 rounded-xl space-y-4">
+                        <div className="space-y-1">
+                          <h4 className="font-brand text-brand-red uppercase tracking-widest flex items-center gap-2">
+                            <Video size={16} /> Video File *
+                          </h4>
+                          <p className="text-[10px] text-text-muted uppercase italic">Any size accepted — high quality</p>
+                        </div>
+                        
+                        <div 
+                          onClick={() => videoInputRef.current?.click()}
+                          className={`relative h-40 border-2 border-dashed ${formError.video ? 'border-brand-red/50 bg-brand-red/5' : 'border-brand-red/10 bg-black/20'} rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-brand-red/30 transition-all overflow-hidden group`}
+                        >
+                          <input type="file" ref={videoInputRef} onChange={handleVideoSelect} accept="video/*" className="hidden" />
+                          
+                          {videoFile ? (
+                            <div className="flex flex-col items-center gap-3 text-center px-4">
+                              <div className="w-16 h-16 bg-brand-red/10 rounded-full flex items-center justify-center">
+                                <Video size={32} className="text-brand-red" />
+                              </div>
+                              <div className="space-y-1 overflow-hidden w-full">
+                                <p className="text-[10px] text-brand-red font-brand uppercase tracking-widest truncate">{videoFile.name}</p>
+                                <p className="text-[9px] text-text-muted uppercase">{formatSize(videoFile.size)} selected</p>
+                              </div>
+                              <button type="button" onClick={(e) => { e.stopPropagation(); setVideoFile(null); }} className="text-[9px] text-text-muted uppercase hover:text-brand-red underline">Change Video</button>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col items-center gap-3 text-center px-4">
+                              <Sparkles size={32} className="text-brand-red/40" />
+                              <div className="space-y-1">
+                                <p className="text-[10px] text-text-muted font-brand uppercase tracking-[2px]">Tap to select video</p>
+                                <p className="text-[9px] text-text-muted/60 uppercase">MP4, MOV, AVI, WEBM accepted</p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        {formError.video && <p className="text-brand-red text-[10px] uppercase font-brand italic">{formError.video}</p>}
+                      </div>
+                    </div>
+
+                    {uploadStage !== 'idle' && (
+                      <div className="glass-card p-6 md:p-8 rounded-xl space-y-6">
+                        <div className="flex items-center justify-between text-[10px] text-text-muted uppercase tracking-widest font-brand">
+                          <div className="flex gap-4">
+                            <span className={uploadStage === 'validating' ? 'text-brand-red' : ''}>{uploadStage === 'validating' ? '●' : '✓'} Validating</span>
+                            <span className={uploadStage === 'processing' ? 'text-brand-red' : ''}>{uploadStage === 'processing' ? '●' : '✓'} Processing</span>
+                            <span className={uploadStage === 'uploading_cover' ? 'text-brand-red' : ''}>{uploadStage === 'uploading_cover' ? '●' : '✓'} Cover</span>
+                            <span className={uploadStage === 'uploading_video' ? 'text-brand-red' : ''}>{uploadStage === 'uploading_video' ? '●' : '✓'} Video</span>
+                          </div>
+                        </div>
+
+                        <div className="space-y-6">
+                          <div className="space-y-2">
+                             <div className="flex justify-between items-center text-[10px] uppercase font-brand">
+                               <span className="text-text-muted tracking-widest">Main Video Upload</span>
+                               <span className="text-brand-red animate-pulse">{videoProgress}%</span>
+                             </div>
+                             <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                                <motion.div 
+                                  initial={{ width: 0 }}
+                                  animate={{ width: `${videoProgress}%` }}
+                                  className="h-full bg-brand-red shadow-[0_0_10px_#B22C3E]"
+                                />
+                             </div>
+                             {uploadStage === 'uploading_video' && (
+                               <div className="grid grid-cols-2 gap-4 mt-2">
+                                  <div className="space-y-1">
+                                     <p className="text-[9px] text-text-muted uppercase">Downloaded</p>
+                                     <p className="text-xs font-brand text-brand-red">{formatSize(videoStats.uploaded)} / {formatSize(videoStats.total)}</p>
+                                  </div>
+                                  <div className="space-y-1 text-right">
+                                     <p className="text-[9px] text-text-muted uppercase">Remaining</p>
+                                     <p className="text-xs font-brand text-brand-red">{formatTime(videoStats.remaining)}</p>
+                                  </div>
+                               </div>
+                             )}
+                          </div>
+                        </div>
+
+                        <div className="bg-brand-red/5 p-4 rounded-lg flex items-start gap-4">
+                           <AlertCircle className="text-brand-red shrink-0" size={18} />
+                           <p className="text-[11px] text-brand-red/80 font-sans leading-relaxed">
+                              Please keep this page open. Your project is being uploaded securely to our premium servers.
+                              You can lock your phone but do not exit the browser.
+                           </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {error && (
+                      <div className="bg-brand-red/10 border border-brand-red/20 p-4 rounded text-brand-red flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <AlertCircle size={18} />
+                          <p className="text-xs font-brand uppercase tracking-widest">{error}</p>
+                        </div>
+                        <button onClick={() => setUploadStage('idle')} className="text-[10px] font-brand uppercase underline">Retry</button>
+                      </div>
+                    )}
+
+                    <button 
+                      type="submit" 
+                      disabled={uploadStage !== 'idle'}
+                      className="w-full h-14 bg-brand-red text-black font-brand text-lg uppercase tracking-[4px] hover:bg-brand-red-dark disabled:opacity-50 transition-all flex items-center justify-center gap-3 shadow-[0_4px_20px_rgba(178,44,62,0.3)]"
+                    >
+                      {uploadStage === 'idle' ? (
+                        <>UPLOAD PROJECT <ChevronRight size={20} /></>
+                      ) : (
+                        <div className="flex items-center gap-3">
+                          <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }} className="w-5 h-5 border-2 border-black border-t-transparent rounded-full" />
+                          PUBLISHING MASTERPIECE...
+                        </div>
+                      )}
+                    </button>
+                  </form>
+
+                  {/* Management Section */}
+                  <div className="space-y-6 pt-12">
+                    <div className="flex items-center justify-between border-b border-brand-red/10 pb-4">
+                       <h3 className="font-brand text-xl text-brand-red uppercase tracking-widest">Manage Projects</h3>
+                       <span className="px-3 py-1 bg-brand-red/10 rounded-full text-brand-red text-[10px] font-brand">{videos.length} Total</span>
+                    </div>
+
+                    <div className="grid gap-4">
+                      {videos.map(project => (
+                        <div key={project.id} className={`glass-card p-4 rounded-xl flex items-center gap-4 group transition-all ${project.isVisible ? 'opacity-100' : 'opacity-40'}`}>
+                           <div className="w-20 h-14 rounded-lg bg-black overflow-hidden border border-brand-red/10 shrink-0">
+                              <img src={project.coverURL} className="w-full h-full object-cover" />
+                           </div>
+                           <div className="flex-1 overflow-hidden">
+                              <h4 className="font-brand text-brand-red uppercase tracking-widest truncate">{project.title}</h4>
+                              <p className="text-[9px] text-text-muted uppercase tracking-widest truncate">{project.category} • {formatSize(project.videoSize)}</p>
+                           </div>
+                           <div className="flex items-center gap-2">
+                              <button 
+                                onClick={() => toggleVisibility(project.id, project.isVisible)}
+                                className={`p-2 rounded-lg transition-colors ${project.isVisible ? 'text-green-500 hover:bg-green-500/10' : 'text-text-muted hover:bg-white/5'}`}
+                                title={project.isVisible ? 'Hide from portfolio' : 'Show in portfolio'}
+                              >
+                                {project.isVisible ? <Eye size={18} /> : <Eye size={18} className="opacity-50" />}
+                              </button>
+                              <button 
+                                onClick={() => deleteProject(project)}
+                                className="p-2 text-brand-red hover:bg-brand-red/10 rounded-lg transition-colors"
+                              >
+                                <Trash2 size={18} />
+                              </button>
+                           </div>
+                        </div>
+                      ))}
+                      {videos.length === 0 && (
+                        <div className="text-center p-12 glass-card rounded-xl opacity-50">
+                           <p className="font-brand text-text-muted uppercase tracking-widest">No projects uploaded yet</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-              ))}
-            </div>
+              )}
+            </AnimatePresence>
           </div>
         )}
 
