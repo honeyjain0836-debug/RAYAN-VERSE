@@ -7,17 +7,22 @@
       "properties": {
         "title": { "type": "string" },
         "description": { "type": "string" },
-        "url": { "type": "string", "description": "YouTube/Vimeo link or direct link" },
+        "videoURL": { "type": "string", "description": "Direct download URL for the video file" },
+        "coverURL": { "type": "string", "description": "URL for the cover image" },
+        "videoPath": { "type": "string" },
+        "coverPath": { "type": "string" },
         "category": { 
           "type": "string", 
-          "enum": ["YouTube", "Reels", "Commercials", "Short Films", "Motion Graphics"] 
+          "enum": ["YouTube Video Edit", "Instagram Reels", "Commercials", "Short Films", "Motion Graphics", "Wedding / Event Edit", "Podcast Edit"] 
         },
-        "duration": { "type": "string" },
-        "thumbnail": { "type": "string" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "videoSize": { "type": "number" },
+        "videoDuration": { "type": "number" },
         "views": { "type": "number" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "isVisible": { "type": "boolean" },
+        "uploadedAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["title", "url", "category"]
+      "required": ["title", "videoURL", "coverURL", "category", "uploadedAt"]
     },
     "Review": {
       "title": "Review",

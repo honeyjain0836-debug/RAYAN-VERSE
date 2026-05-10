@@ -1,7 +1,7 @@
 import { initializeApp, getApps } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
-import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { getAuth, signInAnonymously, onAuthStateChanged, GoogleAuthProvider } from 'firebase/auth';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = getApps().length === 0 
@@ -19,6 +19,7 @@ storage.maxOperationRetryTime = 600000;
 storage.maxUploadRetryTime = 1200000;
 
 export const auth = getAuth(app);
+export const googleProvider = new GoogleAuthProvider();
 
 /* Auto sign in anonymously when app loads */
 onAuthStateChanged(auth, (user) => {

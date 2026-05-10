@@ -4,8 +4,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Lock, LogOut, Video, MessageSquare, Briefcase, Plus, Trash2, Eye, ExternalLink, Star, X, Settings as SettingsIcon, Upload, CheckCircle2, AlertCircle, Menu, LayoutDashboard, Clock, User, Filter, Image as ImageIcon, Sparkles, ChevronRight, Check } from 'lucide-react';
 import { collection, addDoc, deleteDoc, doc, onSnapshot, query, orderBy, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
-import { signInAnonymously } from 'firebase/auth';
-import { db, auth, storage } from '../lib/firebase';
+import { signInAnonymously, signInWithPopup } from 'firebase/auth';
+import { db, auth, storage, googleProvider } from '../lib/firebase';
 import { BrandLogo } from './ui/BrandElements';
 import { uploadProfilePhoto } from '../services/uploadPhoto';
 import imageCompression from 'browser-image-compression';
@@ -60,23 +60,35 @@ export function AdminPanel() {
     }
   };
 
-  const handleStep2 = (e: FormEvent) => {
+  const handleStep2 = async (e: FormEvent) => {
     e.preventDefault();
-    // Instant transition for PIN check
     if (pin === SECURITY_PIN) {
-      setIsAuth(true);
-      window.scrollTo(0, 0);
-      
-      // Update login persistence
-      const currentCount = parseInt(localStorage.getItem('quik_admin_login_count') || '0');
-      const newCount = currentCount + 1;
-      localStorage.setItem('quik_admin_login_count', newCount.toString());
-      
-      // Store credentials for auto-suggest (Step 1 only)
-      localStorage.setItem('quik_admin_email', email);
-      localStorage.setItem('quik_admin_phone', phone);
-      
+      setIsLoading(true);
       setError('');
+      try {
+        const result = await signInWithPopup(auth, googleProvider);
+        if (result.user.email === ADMIN_EMAIL) {
+          setIsAuth(true);
+          window.scrollTo(0, 0);
+          
+          // Update login persistence
+          const currentCount = parseInt(localStorage.getItem('quik_admin_login_count') || '0');
+          const newCount = currentCount + 1;
+          localStorage.setItem('quik_admin_login_count', newCount.toString());
+          
+          // Store credentials for auto-suggest (Step 1 only)
+          localStorage.setItem('quik_admin_email', email);
+          localStorage.setItem('quik_admin_phone', phone);
+        } else {
+          setError(`Access denied. Google account ${result.user.email} is not authorized for this portal.`);
+          await auth.signOut();
+        }
+      } catch (err: any) {
+        console.error("Auth error:", err);
+        setError('Authentication failed. Please ensure your Google account is allowed.');
+      } finally {
+        setIsLoading(false);
+      }
     } else {
       setError('Invalid PIN.');
     }
@@ -175,10 +187,15 @@ export function AdminPanel() {
                 <button 
                   type="submit" 
                   disabled={isLoading}
-                  className="w-full py-4 bg-brand-red text-black font-brand uppercase tracking-widest hover:bg-brand-red-dark hover:shadow-[0_0_20px_#B22C3E] transition-all disabled:opacity-50"
+                  className="w-full py-4 bg-brand-red text-black font-brand uppercase tracking-widest hover:bg-brand-red-dark hover:shadow-[0_0_20px_#B22C3E] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                 >
-                  {isLoading ? 'Accessing...' : 'Access Portal'}
+                  {isLoading ? 'Verifying...' : (
+                    <>
+                      Secure Sign-in <Sparkles size={18} />
+                    </>
+                  )}
                 </button>
+                <p className="text-[10px] text-text-muted text-center italic">Requires Google verification for authorization.</p>
                 <button type="button" onClick={() => setStep(1)} className="w-full text-text-muted text-xs uppercase tracking-widest hover:text-brand-red">
                   Back to Step 1
                 </button>
@@ -452,11 +469,13 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
       
       let msg = "Failed to upload project. Please retry.";
       if (err.code === 'storage/retry-limit-exceeded') {
-        msg = "The upload was interrupted too many times due to a poor connection. We've increased the timeout limit; please try again.";
+        msg = "Upload interrupted due to network issues. We have increased retry limits; please try again.";
       } else if (err.code === 'storage/unauthorized') {
-        msg = "Authentication failed. Please refresh the page and try again.";
+        msg = "Authorization failed. IMPORTANT: Make sure you have applied the correctly formatted Storage Rules in Firebase Console (Storage -> Rules).";
+      } else if (err.code === 'permission-denied') {
+        msg = "Firestore permission denied. Ensure your Google account matches the ADMIN_EMAIL.";
       } else if (err.message?.includes('quota')) {
-        msg = "Storage quota exceeded for today. Please try again tomorrow.";
+        msg = "Daily storage quota exceeded.";
       } else {
         msg = err.message || msg;
       }

@@ -6,12 +6,16 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function incoming() {
-      return request.resource.data;
+    function isAuth() {
+      return isSignedIn() && request.auth.token.firebase.sign_in_provider != 'anonymous';
     }
 
-    function isValidString(val, max) {
-      return val is string && val.size() <= max;
+    function isAdmin() {
+      return isAuth() && request.auth.token.email == 'rayanjain234@gmail.com' && request.auth.token.email_verified == true;
+    }
+
+    function incoming() {
+      return request.resource.data;
     }
 
     function isValidId(id) {
@@ -26,11 +30,16 @@ service cloud.firestore {
     // Videos Collection
     match /videos/{videoId} {
       allow read: if true;
-      allow write: if isSignedIn() 
+      allow create: if isAdmin() 
         && isValidId(videoId)
         && incoming().title is string && incoming().title.size() <= 200
-        && incoming().url is string && incoming().url.size() <= 1000;
-      allow delete: if isSignedIn();
+        && incoming().videoURL is string && incoming().videoURL.size() <= 1000
+        && incoming().coverURL is string && incoming().coverURL.size() <= 1000;
+      allow update: if (isAdmin() || isSignedIn()) && (
+        (isAdmin()) || 
+        (incoming().diff(resource.data).affectedKeys().hasOnly(['views']))
+      );
+      allow delete: if isAdmin();
     }
 
     // Reviews Collection
@@ -40,33 +49,33 @@ service cloud.firestore {
         && incoming().name is string && incoming().name.size() <= 100
         && incoming().rating is number && incoming().rating >= 1 && incoming().rating <= 5
         && incoming().text is string && incoming().text.size() <= 1000;
-      allow delete: if isSignedIn();
+      allow delete: if isAdmin();
     }
 
     // Queries Collection
     match /queries/{queryId} {
-      allow read: if isSignedIn();
+      allow read: if isAdmin();
       allow create: if true
         && incoming().name is string && incoming().name.size() <= 100
         && incoming().email is string && incoming().email.size() <= 150
         && incoming().projectType is string;
-      allow update: if isSignedIn();
-      allow delete: if isSignedIn();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }
 
     // Messages Collection
     match /messages/{messageId} {
-      allow read: if isSignedIn();
+      allow read: if isAdmin();
       allow create: if true
         && incoming().name is string && incoming().name.size() <= 100
         && incoming().email is string && incoming().email.size() <= 150;
-      allow delete: if isSignedIn();
+      allow delete: if isAdmin();
     }
 
     // Settings Collection
     match /settings/{docId} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow write: if isAdmin();
     }
   }
 }
